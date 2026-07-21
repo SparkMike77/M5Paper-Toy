@@ -56,15 +56,19 @@ void SysInit_Start(void) {
     ret = SD.begin(4, SPI, 20000000, "/sd", 5, false);
     if (ret) {
         sd_detected = true;
-     } else {
+     } else if (IsSDAutoFormatEnabled()) {
         SD.end();
         // format_if_empty=true: FatFs falls back to formatting the card only
         // when it can't mount an existing FAT volume at all (e.g. a card that
         // shipped exFAT-formatted, which is the common case for 64GB+ cards).
+        // Gated on a settings toggle since this is destructive, and the
+        // toggle flips itself back off below once it's actually used, so
+        // it doesn't silently reformat the next card too.
         ret = SD.begin(4, SPI, 20000000, "/sd", 5, true);
         if (ret) {
             sd_detected = true;
             sd_was_unformatted = true;
+            SetSDAutoFormatEnabled(0);
         }
     }
     if (ret == false) {
@@ -119,12 +123,17 @@ void SysInit_Start(void) {
         }
     }
 
-    if (!sd_detected) {
-        SysInit_UpdateInfo("SD Card: Not Detected");
-     } else if (sd_was_unformatted) {
+    if (sd_detected && sd_was_unformatted) {
         SysInit_UpdateInfo("SD Card: Detected, Auto-Formatted");
-     } else {
+     } else if (sd_detected) {
         SysInit_UpdateInfo("SD Card: Detected, Formatted OK");
+     } else if (!IsSDAutoFormatEnabled()) {
+        // Mounting without formatting failed and we didn't try formatting,
+        // so this could be a missing card or just an unformatted one -
+        // we can't tell the two apart without attempting the format.
+        SysInit_UpdateInfo("SD Card: Not Ready (Auto-Format Off)");
+     } else {
+        SysInit_UpdateInfo("SD Card: Not Detected");
     }
     delay(1000);
 

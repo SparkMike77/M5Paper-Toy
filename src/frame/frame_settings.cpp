@@ -6,7 +6,7 @@
 #define KEY_W 92
 #define KEY_H 92
 const uint16_t kWifiStatusY = 160;
-const uint16_t kTimeZoneY = 630;
+const uint16_t kTimeZoneY = 690;
 
 void key_shutdown_cb(epdgui_args_vector_t &args) {
     M5.EPD.WriteFullGram4bpp(GetWallpaper());
@@ -134,6 +134,14 @@ void key_upload_toggle_cb(epdgui_args_vector_t &args) {
     btn->Draw(UPDATE_MODE_GL16);
 }
 
+void key_sd_autofmt_toggle_cb(epdgui_args_vector_t &args) {
+    EPDGUI_Button *btn = (EPDGUI_Button*)(args[0]);
+    bool enabled = !IsSDAutoFormatEnabled();
+    SetSDAutoFormatEnabled(enabled);
+    btn->setLabel(enabled ? "Format SD on Boot: ON" : "Format SD on Boot: OFF");
+    btn->Draw(UPDATE_MODE_GL16);
+}
+
 Frame_Settings::Frame_Settings(void) {
     _frame_name = "Frame_Settings";
 
@@ -153,10 +161,11 @@ Frame_Settings::Frame_Settings(void) {
 
     _key_wifi = new EPDGUI_Button(4, 100, 532, 61);
     _key_upload = new EPDGUI_Button(4, 230, 532, 61);
-    _key_wallpaper = new EPDGUI_Button(4, 290, 532, 61);
-    _key_syncntp = new EPDGUI_Button(4, 350, 532, 61);
-    _key_restart = new EPDGUI_Button(4, 450, 532, 61);
-    _key_shutdown = new EPDGUI_Button(4, 510, 532, 61);
+    _key_sd_autofmt = new EPDGUI_Button(4, 290, 532, 61);
+    _key_wallpaper = new EPDGUI_Button(4, 350, 532, 61);
+    _key_syncntp = new EPDGUI_Button(4, 410, 532, 61);
+    _key_restart = new EPDGUI_Button(4, 510, 532, 61);
+    _key_shutdown = new EPDGUI_Button(4, 570, 532, 61);
 
     key_timezone_plus = new EPDGUI_Button("+", 448, kTimeZoneY + 2, 88, 52);
     String str = String(GetTimeZone());
@@ -186,6 +195,7 @@ Frame_Settings::Frame_Settings(void) {
     // No dedicated icon art yet - falls back to the button's default
     // bordered/centered-text rendering (same as Calculator/Timer/Notes).
     _key_upload->setLabel(IsUploadServerEnabled() ? "Uploads: ON" : "Uploads: OFF");
+    _key_sd_autofmt->setLabel(IsSDAutoFormatEnabled() ? "Format SD on Boot: ON" : "Format SD on Boot: OFF");
     _timezone_canvas->drawString("Time Zone (UTC)", 15, 35);
     exitbtn("Home");
     _canvas_title->drawString("Settings", 270, 34);
@@ -198,6 +208,9 @@ Frame_Settings::Frame_Settings(void) {
 
     _key_upload->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)_key_upload);
     _key_upload->Bind(EPDGUI_Button::EVENT_RELEASED, &key_upload_toggle_cb);
+
+    _key_sd_autofmt->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)_key_sd_autofmt);
+    _key_sd_autofmt->Bind(EPDGUI_Button::EVENT_RELEASED, &key_sd_autofmt_toggle_cb);
 
     _key_wallpaper->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key_wallpaper->Bind(EPDGUI_Button::EVENT_RELEASED, &key_wallpaper_cb);
@@ -214,6 +227,7 @@ Frame_Settings::Frame_Settings(void) {
 Frame_Settings::~Frame_Settings(void) {
     delete _key_wifi;
     delete _key_upload;
+    delete _key_sd_autofmt;
     delete _key_wallpaper;
     delete _key_shutdown;
     delete _key_restart;
@@ -241,6 +255,7 @@ int Frame_Settings::init(epdgui_args_vector_t &args) {
     _timezone_canvas->pushCanvas(0, kTimeZoneY, UPDATE_MODE_NONE);
     EPDGUI_AddObject(_key_wifi);
     EPDGUI_AddObject(_key_upload);
+    EPDGUI_AddObject(_key_sd_autofmt);
     EPDGUI_AddObject(_key_wallpaper);
     EPDGUI_AddObject(_key_shutdown);
     EPDGUI_AddObject(_key_restart);

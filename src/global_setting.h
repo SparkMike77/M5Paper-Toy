@@ -46,4 +46,7 @@ uint8_t GetInitStatus(uint8_t idx);
 uint8_t IsUploadServerEnabled(void);
 void SetUploadServerEnabled(uint8_t val);
 
+uint8_t IsSDAutoFormatEnabled(void);
+void SetSDAutoFormatEnabled(uint8_t val);
+
 #endif //_GLOBAL_SETTING_H_
