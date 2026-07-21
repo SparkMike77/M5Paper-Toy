@@ -49,4 +49,7 @@ void SetUploadServerEnabled(uint8_t val);
 uint8_t IsSDAutoFormatEnabled(void);
 void SetSDAutoFormatEnabled(uint8_t val);
 
+uint8_t IsSDForceFormatPending(void);
+void SetSDForceFormatPending(uint8_t val);
+
 #endif //_GLOBAL_SETTING_H_

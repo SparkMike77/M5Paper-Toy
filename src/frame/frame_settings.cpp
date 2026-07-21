@@ -6,7 +6,7 @@
 #define KEY_W 92
 #define KEY_H 92
 const uint16_t kWifiStatusY = 160;
-const uint16_t kTimeZoneY = 690;
+const uint16_t kTimeZoneY = 750;
 
 void key_shutdown_cb(epdgui_args_vector_t &args) {
     M5.EPD.WriteFullGram4bpp(GetWallpaper());
@@ -142,6 +142,28 @@ void key_sd_autofmt_toggle_cb(epdgui_args_vector_t &args) {
     btn->Draw(UPDATE_MODE_GL16);
 }
 
+// Unconditionally wipes and reformats the SD card, unlike the auto-format
+// toggle above which only ever kicks in when a card fails to mount on its
+// own. Destructive and immediate (restarts right after confirming), so it
+// requires a second tap to arm before it'll actually do anything.
+static bool sd_force_format_armed = false;
+
+void key_sd_force_format_cb(epdgui_args_vector_t &args) {
+    EPDGUI_Button *btn = (EPDGUI_Button*)(args[0]);
+    if (!sd_force_format_armed) {
+        sd_force_format_armed = true;
+        btn->setLabel("Tap Again to Erase Card!");
+        btn->Draw(UPDATE_MODE_GL16);
+        return;
+    }
+    sd_force_format_armed = false;
+    SetSDForceFormatPending(1);
+    M5.EPD.WriteFullGram4bpp(GetWallpaper());
+    M5.EPD.UpdateFull(UPDATE_MODE_GC16);
+    SaveSetting();
+    esp_restart();
+}
+
 Frame_Settings::Frame_Settings(void) {
     _frame_name = "Frame_Settings";
 
@@ -162,10 +184,11 @@ Frame_Settings::Frame_Settings(void) {
     _key_wifi = new EPDGUI_Button(4, 100, 532, 61);
     _key_upload = new EPDGUI_Button(4, 230, 532, 61);
     _key_sd_autofmt = new EPDGUI_Button(4, 290, 532, 61);
-    _key_wallpaper = new EPDGUI_Button(4, 350, 532, 61);
-    _key_syncntp = new EPDGUI_Button(4, 410, 532, 61);
-    _key_restart = new EPDGUI_Button(4, 510, 532, 61);
-    _key_shutdown = new EPDGUI_Button(4, 570, 532, 61);
+    _key_sd_force_format = new EPDGUI_Button(4, 350, 532, 61);
+    _key_wallpaper = new EPDGUI_Button(4, 410, 532, 61);
+    _key_syncntp = new EPDGUI_Button(4, 470, 532, 61);
+    _key_restart = new EPDGUI_Button(4, 570, 532, 61);
+    _key_shutdown = new EPDGUI_Button(4, 630, 532, 61);
 
     key_timezone_plus = new EPDGUI_Button("+", 448, kTimeZoneY + 2, 88, 52);
     String str = String(GetTimeZone());
@@ -196,6 +219,7 @@ Frame_Settings::Frame_Settings(void) {
     // bordered/centered-text rendering (same as Calculator/Timer/Notes).
     _key_upload->setLabel(IsUploadServerEnabled() ? "Uploads: ON" : "Uploads: OFF");
     _key_sd_autofmt->setLabel(IsSDAutoFormatEnabled() ? "Format SD on Boot: ON" : "Format SD on Boot: OFF");
+    _key_sd_force_format->setLabel("Format SD Card Now");
     _timezone_canvas->drawString("Time Zone (UTC)", 15, 35);
     exitbtn("Home");
     _canvas_title->drawString("Settings", 270, 34);
@@ -211,6 +235,9 @@ Frame_Settings::Frame_Settings(void) {
 
     _key_sd_autofmt->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)_key_sd_autofmt);
     _key_sd_autofmt->Bind(EPDGUI_Button::EVENT_RELEASED, &key_sd_autofmt_toggle_cb);
+
+    _key_sd_force_format->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)_key_sd_force_format);
+    _key_sd_force_format->Bind(EPDGUI_Button::EVENT_RELEASED, &key_sd_force_format_cb);
 
     _key_wallpaper->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key_wallpaper->Bind(EPDGUI_Button::EVENT_RELEASED, &key_wallpaper_cb);
@@ -228,6 +255,7 @@ Frame_Settings::~Frame_Settings(void) {
     delete _key_wifi;
     delete _key_upload;
     delete _key_sd_autofmt;
+    delete _key_sd_force_format;
     delete _key_wallpaper;
     delete _key_shutdown;
     delete _key_restart;
@@ -249,6 +277,10 @@ void Frame_Settings::UpdateWifiStatus(m5epd_update_mode_t mode) {
 
 int Frame_Settings::init(epdgui_args_vector_t &args) {
     _is_run = 1;
+    // Never resurface already-armed - a visit that ended without confirming
+    // shouldn't leave a stale "one more tap wipes the card" state waiting.
+    sd_force_format_armed = false;
+    _key_sd_force_format->setLabel("Format SD Card Now");
     M5.EPD.WriteFullGram4bpp(GetWallpaper());
     _canvas_title->pushCanvas(0, 8, UPDATE_MODE_NONE);
     UpdateWifiStatus(UPDATE_MODE_NONE);
@@ -256,6 +288,7 @@ int Frame_Settings::init(epdgui_args_vector_t &args) {
     EPDGUI_AddObject(_key_wifi);
     EPDGUI_AddObject(_key_upload);
     EPDGUI_AddObject(_key_sd_autofmt);
+    EPDGUI_AddObject(_key_sd_force_format);
     EPDGUI_AddObject(_key_wallpaper);
     EPDGUI_AddObject(_key_shutdown);
     EPDGUI_AddObject(_key_restart);

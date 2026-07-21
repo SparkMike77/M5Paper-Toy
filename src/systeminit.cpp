@@ -4,9 +4,30 @@
 #include "Free_Fonts.h"
 #include "global_setting.h"
 #include "resources/binaryttf.h"
+#include "sd_diskio.h"
 #include <WiFi.h>
 
 QueueHandle_t xQueue_Info = xQueueCreate(20, sizeof(uint32_t));
+
+// SD.begin(..., format_if_empty=true) only formats when the card fails to
+// mount at all - it's a fallback, not a "wipe it regardless" switch, since
+// f_mount() succeeding on an already-good card always skips the format
+// path entirely. To honor an explicit "format now" request even on a card
+// that currently mounts fine, we destroy its filesystem signature first by
+// zeroing its leading sectors (FAT32 keeps a backup boot sector around
+// sector 6; exFAT's boot region spans sectors 0-23), so the mount below
+// genuinely fails and the existing, already-proven format fallback runs.
+static void WipeSDBootSectors(void) {
+    uint8_t pdrv = sdcard_init(4, &SPI, 20000000);
+    if (pdrv == 0xFF) {
+        return;
+    }
+    uint8_t zero[512] = {0};
+    for (uint32_t sector = 0; sector < 34; sector++) {
+        sd_write_raw(pdrv, zero, sector);
+    }
+    sdcard_uninit(pdrv);
+}
 
 void WaitForUser(void) {
     SysInit_UpdateInfo("$ERR");
@@ -48,6 +69,14 @@ void SysInit_Start(void) {
     xTaskCreatePinnedToCore(SysInit_Loading, "SysInit_Loading", 4096, NULL, 1, NULL, 0);
     SysInit_UpdateInfo("Initializing SD card...");
     SPI.begin(14, 13, 12, 4);
+
+    bool force_format_this_boot = IsSDForceFormatPending();
+    if (force_format_this_boot) {
+        SysInit_UpdateInfo("Formatting SD card...");
+        WipeSDBootSectors();
+        SetSDForceFormatPending(0);
+    }
+
     // Try mounting as-is first so we can tell "no card" apart from "card
     // present but not formatted" - format_if_empty only kicks in on the
     // second attempt, so a success here means it was already good.
@@ -56,14 +85,15 @@ void SysInit_Start(void) {
     ret = SD.begin(4, SPI, 20000000, "/sd", 5, false);
     if (ret) {
         sd_detected = true;
-     } else if (IsSDAutoFormatEnabled()) {
+     } else if (IsSDAutoFormatEnabled() || force_format_this_boot) {
         SD.end();
         // format_if_empty=true: FatFs falls back to formatting the card only
         // when it can't mount an existing FAT volume at all (e.g. a card that
-        // shipped exFAT-formatted, which is the common case for 64GB+ cards).
-        // Gated on a settings toggle since this is destructive, and the
-        // toggle flips itself back off below once it's actually used, so
-        // it doesn't silently reformat the next card too.
+        // shipped exFAT-formatted, which is the common case for 64GB+ cards,
+        // or one we just deliberately wiped above). Gated on a settings
+        // toggle since this is destructive, and the toggle flips itself
+        // back off below once it's actually used, so it doesn't silently
+        // reformat the next card too.
         ret = SD.begin(4, SPI, 20000000, "/sd", 5, true);
         if (ret) {
             sd_detected = true;

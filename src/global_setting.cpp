@@ -57,6 +57,7 @@ uint8_t global_init_status = 0xFF;
 int8_t global_timezone = 0;
 uint8_t global_upload_enabled = 0;
 uint8_t global_sd_autoformat_enabled = 0;
+uint8_t global_sd_force_format_pending = 0;
 
 
 int8_t GetTimeZone(void) {
@@ -91,6 +92,15 @@ uint8_t IsSDAutoFormatEnabled(void) {
 
 void SetSDAutoFormatEnabled(uint8_t val) {
     global_sd_autoformat_enabled = val;
+    SaveSetting();
+}
+
+uint8_t IsSDForceFormatPending(void) {
+    return global_sd_force_format_pending;
+}
+
+void SetSDForceFormatPending(uint8_t val) {
+    global_sd_force_format_pending = val;
     SaveSetting();
 }
 
@@ -136,6 +146,7 @@ esp_err_t LoadSetting(void) {
     nvs_get_i8(nvs_arg, "timezone", &global_timezone);
     nvs_get_u8(nvs_arg, "upload_en", &global_upload_enabled);
     nvs_get_u8(nvs_arg, "sd_autofmt", &global_sd_autoformat_enabled);
+    nvs_get_u8(nvs_arg, "sd_force_fmt", &global_sd_force_format_pending);
 
     if (global_wallpaper >= WALLPAPER_NUM) {
         global_wallpaper = DEFAULT_WALLPAPER;
@@ -162,6 +173,7 @@ esp_err_t SaveSetting(void) {
     NVS_CHECK(nvs_set_i8(nvs_arg, "timezone", global_timezone));
     NVS_CHECK(nvs_set_u8(nvs_arg, "upload_en", global_upload_enabled));
     NVS_CHECK(nvs_set_u8(nvs_arg, "sd_autofmt", global_sd_autoformat_enabled));
+    NVS_CHECK(nvs_set_u8(nvs_arg, "sd_force_fmt", global_sd_force_format_pending));
     NVS_CHECK(nvs_set_str(nvs_arg, "ssid", global_wifi_ssid.c_str()));
     NVS_CHECK(nvs_set_str(nvs_arg, "pswd", global_wifi_password.c_str()));
     NVS_CHECK(nvs_commit(nvs_arg));
