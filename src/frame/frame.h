@@ -10,6 +10,8 @@
 #include "frame_settings_wifi_password.h"
 #include "frame_lifegame.h"
 #include "frame_calculator.h"
+#include "frame_timer.h"
+#include "frame_notes.h"
 #include "frame_fileindex.h"
 #include "frame_txtreader.h"
 #include "frame_compare.h"

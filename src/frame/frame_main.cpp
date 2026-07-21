@@ -4,6 +4,8 @@
 #include "frame_factorytest.h"
 #include "frame_lifegame.h"
 #include "frame_calculator.h"
+#include "frame_timer.h"
+#include "frame_notes.h"
 #include "frame_fileindex.h"
 #include "frame_compare.h"
 #include "frame_home.h"
@@ -17,7 +19,9 @@ enum {
     kKeySDFile,
     kKeyCompare,
     kKeyHome,
-    kKeyLifeGame
+    kKeyLifeGame,
+    kKeyTimer,
+    kKeyNotes
 };
 
 #define KEY_W 92
@@ -99,6 +103,26 @@ void key_home_cb(epdgui_args_vector_t &args) {
     *((int*)(args[0])) = 0;
 }
 
+void key_timer_cb(epdgui_args_vector_t &args) {
+    Frame_Base *frame = EPDGUI_GetFrame("Frame_Timer");
+    if (frame == NULL) {
+        frame = new Frame_Timer();
+        EPDGUI_AddFrame("Frame_Timer", frame);
+    }
+    EPDGUI_PushFrame(frame);
+    *((int*)(args[0])) = 0;
+}
+
+void key_notes_cb(epdgui_args_vector_t &args) {
+    Frame_Base *frame = EPDGUI_GetFrame("Frame_Notes");
+    if (frame == NULL) {
+        frame = new Frame_Notes();
+        EPDGUI_AddFrame("Frame_Notes", frame);
+    }
+    EPDGUI_PushFrame(frame);
+    *((int*)(args[0])) = 0;
+}
+
 
 Frame_Main::Frame_Main(void): Frame_Base(false) {
     _frame_name = "Frame_Main";
@@ -118,6 +142,10 @@ Frame_Main::Frame_Main(void): Frame_Base(false) {
 
     for (int i = 0; i < 4; i++) {
         _key[i + 4] = new EPDGUI_Button("Test", 20 + i * 136, 240, KEY_W, KEY_H);
+    }
+
+    for (int i = 0; i < 4; i++) {
+        _key[i + 8] = new EPDGUI_Button("Test", 20 + i * 136, 390, KEY_W, KEY_H);
     }
 
     _key[kKeySetting]->CanvasNormal()->pushImage(0, 0, 92, 92, ImageResource_main_icon_setting_92x92);
@@ -168,13 +196,23 @@ Frame_Main::Frame_Main(void): Frame_Base(false) {
     _key[kKeyHome]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key[kKeyHome]->Bind(EPDGUI_Button::EVENT_RELEASED, key_home_cb);
 
+    // No dedicated icon art yet - falls back to the button's default
+    // bordered/centered-text rendering (same as the placeholder "Test" look).
+    _key[kKeyTimer]->setLabel("Timer");
+    _key[kKeyTimer]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
+    _key[kKeyTimer]->Bind(EPDGUI_Button::EVENT_RELEASED, key_timer_cb);
+
+    _key[kKeyNotes]->setLabel("Notes");
+    _key[kKeyNotes]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
+    _key[kKeyNotes]->Bind(EPDGUI_Button::EVENT_RELEASED, key_notes_cb);
+
     _time = 0;
     _next_update_time = 0;
 }
 
 
 Frame_Main::~Frame_Main(void) {
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 12; i++) {
         delete _key[i];
     }
 }
@@ -198,6 +236,11 @@ void Frame_Main::AppName(m5epd_update_mode_t mode) {
     _names->drawString("Home", 20 + 46 + 2 * 136, 16);
     _names->drawString("LifeGame", 20 + 46 + 3 * 136, 16);
     _names->pushCanvas(0, 337, mode);
+
+    _names->fillCanvas(0);
+    _names->drawString("Timer", 20 + 46, 16);
+    _names->drawString("Notes", 20 + 46 + 136, 16);
+    _names->pushCanvas(0, 487, mode);
 }
 
 void Frame_Main::StatusBar(m5epd_update_mode_t mode) {
@@ -275,14 +318,14 @@ void Frame_Main::StatusBar(m5epd_update_mode_t mode) {
 int Frame_Main::init(epdgui_args_vector_t &args) {
     _is_run = 1;
     M5.EPD.WriteFullGram4bpp(GetWallpaper());
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 12; i++) {
         EPDGUI_AddObject(_key[i]);
     }
     _time = 0;
     _next_update_time = 0;
     StatusBar(UPDATE_MODE_NONE);
     AppName(UPDATE_MODE_NONE);
-    return 9;
+    return 13;
 }
 
 int Frame_Main::run() {
