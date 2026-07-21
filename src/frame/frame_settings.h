@@ -9,10 +9,12 @@ public:
     Frame_Settings();
     ~Frame_Settings();
     int init(epdgui_args_vector_t &args);
-
+    void UpdateWifiStatus(m5epd_update_mode_t mode);
 
 private:
+    M5EPD_Canvas *_wifi_status_canvas;
     EPDGUI_Button *_key_wifi;
+    EPDGUI_Button *_key_upload;
     EPDGUI_Button *_key_wallpaper;
     EPDGUI_Button *_key_shutdown;
     EPDGUI_Button *_key_restart;

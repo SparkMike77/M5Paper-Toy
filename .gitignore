@@ -5,3 +5,6 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Test ebooks used for exercising the EPUB reader, not project source.
+*.epub

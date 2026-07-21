@@ -5,7 +5,8 @@
 
 #define KEY_W 92
 #define KEY_H 92
-const uint16_t kTimeZoneY = 500;
+const uint16_t kWifiStatusY = 160;
+const uint16_t kTimeZoneY = 630;
 
 void key_shutdown_cb(epdgui_args_vector_t &args) {
     M5.EPD.WriteFullGram4bpp(GetWallpaper());
@@ -125,6 +126,14 @@ void key_timezone_reset_cb(epdgui_args_vector_t &args) {
     SetTimeZone(*tz);
 }
 
+void key_upload_toggle_cb(epdgui_args_vector_t &args) {
+    EPDGUI_Button *btn = (EPDGUI_Button*)(args[0]);
+    bool enabled = !IsUploadServerEnabled();
+    SetUploadServerEnabled(enabled);
+    btn->setLabel(enabled ? "Uploads: ON" : "Uploads: OFF");
+    btn->Draw(UPDATE_MODE_GL16);
+}
+
 Frame_Settings::Frame_Settings(void) {
     _frame_name = "Frame_Settings";
 
@@ -136,11 +145,18 @@ Frame_Settings::Frame_Settings(void) {
     _timezone_canvas->setTextDatum(CL_DATUM);
     _timezone_canvas->drawRect(0, 0, 540, 60, 15);
  
+    _wifi_status_canvas = new M5EPD_Canvas(&M5.EPD);
+    _wifi_status_canvas->createCanvas(540, 70);
+    _wifi_status_canvas->setTextSize(26);
+    _wifi_status_canvas->setTextColor(15);
+    _wifi_status_canvas->setTextDatum(CL_DATUM);
+
     _key_wifi = new EPDGUI_Button(4, 100, 532, 61);
-    _key_wallpaper = new EPDGUI_Button(4, 160, 532, 61);
-    _key_syncntp = new EPDGUI_Button(4, 220, 532, 61);
-    _key_restart = new EPDGUI_Button(4, 320, 532, 61);
-    _key_shutdown = new EPDGUI_Button(4, 380, 532, 61);
+    _key_upload = new EPDGUI_Button(4, 230, 532, 61);
+    _key_wallpaper = new EPDGUI_Button(4, 290, 532, 61);
+    _key_syncntp = new EPDGUI_Button(4, 350, 532, 61);
+    _key_restart = new EPDGUI_Button(4, 450, 532, 61);
+    _key_shutdown = new EPDGUI_Button(4, 510, 532, 61);
 
     key_timezone_plus = new EPDGUI_Button("+", 448, kTimeZoneY + 2, 88, 52);
     String str = String(GetTimeZone());
@@ -167,6 +183,9 @@ Frame_Settings::Frame_Settings(void) {
     _key_syncntp->setBMPButton("  Sync Time", "", ImageResource_item_icon_ntptime_32x32);
     _key_restart->setBMPButton("  Restart", "", ImageResource_item_icon_restart_32x32);
     _key_shutdown->setBMPButton("  Shutdown", "", ImageResource_item_icon_shutdown_32x32);
+    // No dedicated icon art yet - falls back to the button's default
+    // bordered/centered-text rendering (same as Calculator/Timer/Notes).
+    _key_upload->setLabel(IsUploadServerEnabled() ? "Uploads: ON" : "Uploads: OFF");
     _timezone_canvas->drawString("Time Zone (UTC)", 15, 35);
     exitbtn("Home");
     _canvas_title->drawString("Settings", 270, 34);
@@ -176,6 +195,9 @@ Frame_Settings::Frame_Settings(void) {
 
     _key_wifi->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key_wifi->Bind(EPDGUI_Button::EVENT_RELEASED, &key_wifi_cb);
+
+    _key_upload->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)_key_upload);
+    _key_upload->Bind(EPDGUI_Button::EVENT_RELEASED, &key_upload_toggle_cb);
 
     _key_wallpaper->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key_wallpaper->Bind(EPDGUI_Button::EVENT_RELEASED, &key_wallpaper_cb);
@@ -191,18 +213,34 @@ Frame_Settings::Frame_Settings(void) {
 
 Frame_Settings::~Frame_Settings(void) {
     delete _key_wifi;
+    delete _key_upload;
     delete _key_wallpaper;
     delete _key_shutdown;
     delete _key_restart;
     delete _key_syncntp;
+    delete _wifi_status_canvas;
+}
+
+void Frame_Settings::UpdateWifiStatus(m5epd_update_mode_t mode) {
+    _wifi_status_canvas->fillCanvas(0);
+    if (WiFi.status() == WL_CONNECTED) {
+        _wifi_status_canvas->drawString("Connected : " + WiFi.SSID(), 15, 20);
+        _wifi_status_canvas->drawString("IP Address : " + WiFi.localIP().toString(), 15, 48);
+     } else {
+        _wifi_status_canvas->drawString("Connected : No", 15, 20);
+        _wifi_status_canvas->drawString("IP Address : -", 15, 48);
+    }
+    _wifi_status_canvas->pushCanvas(0, kWifiStatusY, mode);
 }
 
 int Frame_Settings::init(epdgui_args_vector_t &args) {
     _is_run = 1;
     M5.EPD.WriteFullGram4bpp(GetWallpaper());
     _canvas_title->pushCanvas(0, 8, UPDATE_MODE_NONE);
+    UpdateWifiStatus(UPDATE_MODE_NONE);
     _timezone_canvas->pushCanvas(0, kTimeZoneY, UPDATE_MODE_NONE);
     EPDGUI_AddObject(_key_wifi);
+    EPDGUI_AddObject(_key_upload);
     EPDGUI_AddObject(_key_wallpaper);
     EPDGUI_AddObject(_key_shutdown);
     EPDGUI_AddObject(_key_restart);

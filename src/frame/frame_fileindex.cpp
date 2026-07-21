@@ -1,6 +1,7 @@
 #include "frame_fileindex.h"
 #include "frame_txtreader.h"
 #include "frame_pictureviewer.h"
+#include "frame_epubreader.h"
 
 
 #define MAX_BTN_NUM     14
@@ -21,6 +22,13 @@ void key_fileindex_image_cb(epdgui_args_vector_t &args) {
 
 void key_fileindex_text_cb(epdgui_args_vector_t &args) {
     Frame_Base *frame = new Frame_txtReader(((EPDGUI_Button*)(args[0]))->GetCustomString());
+    EPDGUI_PushFrame(frame);
+    *((int*)(args[1])) = 0;
+    log_d("%s", ((EPDGUI_Button*)(args[0]))->GetCustomString().c_str());
+}
+
+void key_fileindex_epub_cb(epdgui_args_vector_t &args) {
+    Frame_Base *frame = new Frame_EpubReader(((EPDGUI_Button*)(args[0]))->GetCustomString());
     EPDGUI_PushFrame(frame);
     *((int*)(args[1])) = 0;
     log_d("%s", ((EPDGUI_Button*)(args[0]))->GetCustomString().c_str());
@@ -137,7 +145,14 @@ void Frame_FileIndex::listDir(fs::FS &fs, const char *dirname) {
             btn->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, btn);
             btn->AddArgs(EPDGUI_Button::EVENT_RELEASED, 1, (void*)(&_is_run));
             btn->Bind(EPDGUI_Button::EVENT_RELEASED, key_fileindex_text_cb);
-         } else if ((suffix.indexOf("bmp") >= 0) 
+         } else if ((suffix.indexOf("epub") >= 0) || (suffix.indexOf("EPUB") >= 0)) {
+            // No dedicated EPUB icon in this resource set yet - reuse the
+            // plain-text icon rather than adding new bitmap assets.
+            btn->CanvasNormal()->pushImage(15, 14, 32, 32, ImageResource_item_icon_file_text_32x32);
+            btn->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, btn);
+            btn->AddArgs(EPDGUI_Button::EVENT_RELEASED, 1, (void*)(&_is_run));
+            btn->Bind(EPDGUI_Button::EVENT_RELEASED, key_fileindex_epub_cb);
+         } else if ((suffix.indexOf("bmp") >= 0)
         || (suffix.indexOf("BMP") >= 0) 
         || (suffix.indexOf("png") >= 0)
         || (suffix.indexOf("PNG") >= 0)
