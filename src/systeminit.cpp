@@ -67,6 +67,14 @@ void SysInit_Start(void) {
 
     disableCore0WDT();
     xTaskCreatePinnedToCore(SysInit_Loading, "SysInit_Loading", 4096, NULL, 1, NULL, 0);
+
+    // Must run before any of the SD-related settings below are read - this
+    // used to happen after SD init entirely (harmless for settings that are
+    // only read even later, like WiFi credentials, but it meant the SD
+    // auto-format/force-format flags were always read as their compile-time
+    // defaults here, never their actual persisted values).
+    LoadSetting();
+
     SysInit_UpdateInfo("Initializing SD card...");
     SPI.begin(14, 13, 12, 4);
 
@@ -117,8 +125,7 @@ void SysInit_Start(void) {
     }
 
     M5.BatteryADCBegin();
-    LoadSetting();
-    
+
     M5EPD_Canvas _initcanvas(&M5.EPD);
     if (SD.exists("/font.ttf")) {
         _initcanvas.loadFont("/font.ttf", SD);
