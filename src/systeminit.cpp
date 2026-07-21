@@ -48,7 +48,25 @@ void SysInit_Start(void) {
     xTaskCreatePinnedToCore(SysInit_Loading, "SysInit_Loading", 4096, NULL, 1, NULL, 0);
     SysInit_UpdateInfo("Initializing SD card...");
     SPI.begin(14, 13, 12, 4);
-    ret = SD.begin(4, SPI, 20000000);
+    // Try mounting as-is first so we can tell "no card" apart from "card
+    // present but not formatted" - format_if_empty only kicks in on the
+    // second attempt, so a success here means it was already good.
+    bool sd_detected = false;
+    bool sd_was_unformatted = false;
+    ret = SD.begin(4, SPI, 20000000, "/sd", 5, false);
+    if (ret) {
+        sd_detected = true;
+     } else {
+        SD.end();
+        // format_if_empty=true: FatFs falls back to formatting the card only
+        // when it can't mount an existing FAT volume at all (e.g. a card that
+        // shipped exFAT-formatted, which is the common case for 64GB+ cards).
+        ret = SD.begin(4, SPI, 20000000, "/sd", 5, true);
+        if (ret) {
+            sd_detected = true;
+            sd_was_unformatted = true;
+        }
+    }
     if (ret == false) {
         SetInitStatus(0, 0);
         log_e("Failed to initialize SD card.");
@@ -100,7 +118,16 @@ void SysInit_Start(void) {
             }
         }
     }
-    
+
+    if (!sd_detected) {
+        SysInit_UpdateInfo("SD Card: Not Detected");
+     } else if (sd_was_unformatted) {
+        SysInit_UpdateInfo("SD Card: Detected, Auto-Formatted");
+     } else {
+        SysInit_UpdateInfo("SD Card: Detected, Formatted OK");
+    }
+    delay(1000);
+
     log_d("done");
 
     while (uxQueueMessagesWaiting(xQueue_Info));
