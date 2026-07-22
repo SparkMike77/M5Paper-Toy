@@ -39,6 +39,16 @@ void key_fileindex_exit_cb(epdgui_args_vector_t &args) {
     *((int*)(args[0])) = 0;
 }
 
+// file.name() returns only the bare filename with no path component on this
+// core (see vfs_api.cpp's VFSFileImpl::name()), so the directory this listing
+// is for has to be re-joined here to get back an absolute path openable by SD.
+static String JoinPath(const String &dir, const String &name) {
+    if (dir == "/") {
+        return "/" + name;
+    }
+    return dir + "/" + name;
+}
+
 Frame_FileIndex::Frame_FileIndex(String path) {
     _frame_name = "Frame_FileIndex";
     _path = path;
@@ -115,7 +125,7 @@ void Frame_FileIndex::listDir(fs::FS &fs, const char *dirname) {
         btn->CanvasNormal()->setTextDatum(CL_DATUM);
         btn->CanvasNormal()->setTextColor(15);
         btn->CanvasNormal()->drawString(filename, 47 + 13, 35);
-        btn->SetCustomString(file.name());
+        btn->SetCustomString(JoinPath(_path, file.name()));
         btn->CanvasNormal()->setTextDatum(CR_DATUM);
         btn->CanvasNormal()->pushImage(15, 14, 32, 32, ImageResource_item_icon_file_folder_32x32);
         btn->CanvasNormal()->pushImage(532 - 15 - 32, 14, 32, 32, ImageResource_item_icon_arrow_r_32x32);
@@ -156,7 +166,7 @@ void Frame_FileIndex::listDir(fs::FS &fs, const char *dirname) {
         btn->CanvasNormal()->setTextDatum(CL_DATUM);
         btn->CanvasNormal()->setTextColor(15);
         btn->CanvasNormal()->drawString(filename, 47 + 13, 35);
-        btn->SetCustomString(file.name());
+        btn->SetCustomString(JoinPath(_path, file.name()));
         btn->CanvasNormal()->setTextDatum(CR_DATUM);
 
         String suffix = filename.substring(filename.lastIndexOf("."));

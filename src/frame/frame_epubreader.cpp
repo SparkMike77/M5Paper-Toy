@@ -193,6 +193,7 @@ int Frame_EpubReader::init(epdgui_args_vector_t &args) {
 
     if (_open_failed) {
         _canvas_status->fillCanvas(0);
+        _canvas_status->setTextSize(26);
         _canvas_status->setTextDatum(CL_DATUM);
         _canvas_status->drawString("Could not open this EPUB.", 10, 16);
         _canvas_status->pushCanvas(0, kStatusBarY, UPDATE_MODE_GC16);
