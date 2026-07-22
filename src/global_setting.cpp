@@ -1,6 +1,7 @@
 #include "global_setting.h"
 #include "./resources/ImageResource.h"
 #include "esp32-hal-log.h"
+#include "esp_log.h"
 #include <WiFi.h>
 
 #define DEFAULT_WALLPAPER 2
@@ -58,6 +59,7 @@ int8_t global_timezone = 0;
 uint8_t global_upload_enabled = 0;
 uint8_t global_sd_autoformat_enabled = 0;
 uint8_t global_sd_force_format_pending = 0;
+uint8_t global_diagnostics_enabled = 0;
 
 
 int8_t GetTimeZone(void) {
@@ -104,6 +106,23 @@ void SetSDForceFormatPending(uint8_t val) {
     SaveSetting();
 }
 
+uint8_t IsDiagnosticsEnabled(void) {
+    return global_diagnostics_enabled;
+}
+
+void SetDiagnosticsEnabled(uint8_t val) {
+    global_diagnostics_enabled = val;
+    SaveSetting();
+    ApplyDiagnosticsLevel();
+}
+
+// log_d()/log_e() etc. are compiled in at CORE_DEBUG_LEVEL (set in
+// platformio.ini), but esp_log's runtime level is an independent, live
+// gate on top of that - no reboot needed to change it.
+void ApplyDiagnosticsLevel(void) {
+    esp_log_level_set("*", global_diagnostics_enabled ? ESP_LOG_DEBUG : ESP_LOG_WARN);
+}
+
 void SetTTFLoaded(uint8_t val) {
     global_ttf_file_loaded = val;
 }
@@ -147,6 +166,8 @@ esp_err_t LoadSetting(void) {
     nvs_get_u8(nvs_arg, "upload_en", &global_upload_enabled);
     nvs_get_u8(nvs_arg, "sd_autofmt", &global_sd_autoformat_enabled);
     nvs_get_u8(nvs_arg, "sd_force_fmt", &global_sd_force_format_pending);
+    nvs_get_u8(nvs_arg, "diag_en", &global_diagnostics_enabled);
+    ApplyDiagnosticsLevel();
 
     if (global_wallpaper >= WALLPAPER_NUM) {
         global_wallpaper = DEFAULT_WALLPAPER;
@@ -174,6 +195,7 @@ esp_err_t SaveSetting(void) {
     NVS_CHECK(nvs_set_u8(nvs_arg, "upload_en", global_upload_enabled));
     NVS_CHECK(nvs_set_u8(nvs_arg, "sd_autofmt", global_sd_autoformat_enabled));
     NVS_CHECK(nvs_set_u8(nvs_arg, "sd_force_fmt", global_sd_force_format_pending));
+    NVS_CHECK(nvs_set_u8(nvs_arg, "diag_en", global_diagnostics_enabled));
     NVS_CHECK(nvs_set_str(nvs_arg, "ssid", global_wifi_ssid.c_str()));
     NVS_CHECK(nvs_set_str(nvs_arg, "pswd", global_wifi_password.c_str()));
     NVS_CHECK(nvs_commit(nvs_arg));

@@ -17,6 +17,7 @@ private:
     EPDGUI_Button *_key_upload;
     EPDGUI_Button *_key_sd_autofmt;
     EPDGUI_Button *_key_sd_force_format;
+    EPDGUI_Button *_key_diagnostics;
     EPDGUI_Button *_key_wallpaper;
     EPDGUI_Button *_key_shutdown;
     EPDGUI_Button *_key_restart;

@@ -19,13 +19,31 @@ QueueHandle_t xQueue_Info = xQueueCreate(20, sizeof(uint32_t));
 // genuinely fails and the existing, already-proven format fallback runs.
 static void WipeSDBootSectors(void) {
     uint8_t pdrv = sdcard_init(4, &SPI, 20000000);
+    log_d("WipeSDBootSectors: sdcard_init returned pdrv=%d", pdrv);
     if (pdrv == 0xFF) {
+        log_e("WipeSDBootSectors: sdcard_init failed, cannot wipe");
         return;
     }
+
+    // sdcard_init() alone leaves FatFs's internal "not initialized" status
+    // flag set - only f_mount() clears it, as a side effect of FatFs's own
+    // disk_initialize() callback running (confirmed by every raw write
+    // below silently failing without this). The mount result itself is
+    // irrelevant here (and will likely succeed, since nothing's wiped yet);
+    // it's only called so the writes actually reach the SPI bus instead of
+    // being rejected before they're even attempted.
+    sdcard_mount(pdrv, "/sd", 1, false);
+
     uint8_t zero[512] = {0};
+    int failures = 0;
     for (uint32_t sector = 0; sector < 34; sector++) {
-        sd_write_raw(pdrv, zero, sector);
+        if (!sd_write_raw(pdrv, zero, sector)) {
+            failures++;
+        }
     }
+    log_d("WipeSDBootSectors: wrote 34 sectors, %d failed", failures);
+
+    sdcard_unmount(pdrv);
     sdcard_uninit(pdrv);
 }
 
@@ -79,6 +97,7 @@ void SysInit_Start(void) {
     SPI.begin(14, 13, 12, 4);
 
     bool force_format_this_boot = IsSDForceFormatPending();
+    log_d("force_format_this_boot=%d auto_format_enabled=%d", force_format_this_boot, IsSDAutoFormatEnabled());
     if (force_format_this_boot) {
         SysInit_UpdateInfo("Formatting SD card...");
         WipeSDBootSectors();
@@ -91,6 +110,7 @@ void SysInit_Start(void) {
     bool sd_detected = false;
     bool sd_was_unformatted = false;
     ret = SD.begin(4, SPI, 20000000, "/sd", 5, false);
+    log_d("SD.begin (no format) returned %d", ret);
     if (ret) {
         sd_detected = true;
      } else if (IsSDAutoFormatEnabled() || force_format_this_boot) {
@@ -103,6 +123,7 @@ void SysInit_Start(void) {
         // back off below once it's actually used, so it doesn't silently
         // reformat the next card too.
         ret = SD.begin(4, SPI, 20000000, "/sd", 5, true);
+        log_d("SD.begin (format_if_empty) returned %d", ret);
         if (ret) {
             sd_detected = true;
             sd_was_unformatted = true;

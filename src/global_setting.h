@@ -52,4 +52,8 @@ void SetSDAutoFormatEnabled(uint8_t val);
 uint8_t IsSDForceFormatPending(void);
 void SetSDForceFormatPending(uint8_t val);
 
+uint8_t IsDiagnosticsEnabled(void);
+void SetDiagnosticsEnabled(uint8_t val);
+void ApplyDiagnosticsLevel(void);
+
 #endif //_GLOBAL_SETTING_H_
