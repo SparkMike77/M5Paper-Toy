@@ -184,6 +184,11 @@ int Frame_EpubReader::init(epdgui_args_vector_t &args) {
     _canvas_title->drawString(_path.substring(_path.lastIndexOf("/") + 1, _path.lastIndexOf(".")), 100, 34);
     _canvas_title->pushCanvas(0, 8, UPDATE_MODE_NONE);
 
+    _canvas_prev->createCanvas(540, kContentH);
+    _canvas_current->createCanvas(540, kContentH);
+    _canvas_next->createCanvas(540, kContentH);
+    _canvas_status->createCanvas(540, kContentY - kStatusBarY);
+
     EPDGUI_AddObject(_key_exit);
 
     if (_open_failed) {
