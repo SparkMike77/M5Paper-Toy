@@ -112,6 +112,12 @@ void EPDGUI_Run(Frame_Base* frame) {
         }
 
         UploadServer_Loop();
+
+        // The loop above has no other blocking call, so without this the
+        // Arduino loop task spins at 100% CPU nonstop and the idle task
+        // never runs long enough for automatic light-sleep to kick in -
+        // a major battery drain on hardware with a ~2 hour runtime.
+        delay(1);
     }
 }
 
