@@ -14,6 +14,7 @@
 #include "frame_notes.h"
 #include "frame_epubreader.h"
 #include "frame_epubtoc.h"
+#include "frame_pdfreader.h"
 #include "frame_fileindex.h"
 #include "frame_txtreader.h"
 #include "frame_compare.h"
