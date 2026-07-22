@@ -94,8 +94,18 @@ void Frame_FileIndex::listDir(fs::FS &fs, const char *dirname) {
         EPDGUI_Button *btn = new EPDGUI_Button(4, 100 + _key_files.size() * 60, 532, 61);
         _key_files.push_back(btn);
 
+        // file.name() already returns the bare filename with no path
+        // component on this core (see vfs_api.cpp's VFSFileImpl::name()) -
+        // stripping up to the last '/' here used to be necessary on older
+        // cores, but lastIndexOf("/") now always returns -1, and passing
+        // that to substring() (which takes an unsigned index) wraps around
+        // to a huge value, silently returning an empty string every time.
+        // Only strip a path prefix if one is actually present.
         String filename(file.name());
-        filename = filename.substring(filename.lastIndexOf("/"));
+        int lastSlash = filename.lastIndexOf("/");
+        if (lastSlash >= 0) {
+            filename = filename.substring(lastSlash + 1);
+        }
         if (filename.length() > 19) {
             filename = filename.substring(0, 19) + "...";
         }
@@ -125,8 +135,18 @@ void Frame_FileIndex::listDir(fs::FS &fs, const char *dirname) {
         EPDGUI_Button *btn = new EPDGUI_Button(4, 100 + _key_files.size() * 60, 532, 61);
         _key_files.push_back(btn);
 
+        // file.name() already returns the bare filename with no path
+        // component on this core (see vfs_api.cpp's VFSFileImpl::name()) -
+        // stripping up to the last '/' here used to be necessary on older
+        // cores, but lastIndexOf("/") now always returns -1, and passing
+        // that to substring() (which takes an unsigned index) wraps around
+        // to a huge value, silently returning an empty string every time.
+        // Only strip a path prefix if one is actually present.
         String filename(file.name());
-        filename = filename.substring(filename.lastIndexOf("/"));
+        int lastSlash = filename.lastIndexOf("/");
+        if (lastSlash >= 0) {
+            filename = filename.substring(lastSlash + 1);
+        }
         if (filename.length() > 19) {
             filename = filename.substring(0, 19) + "...";
         }
