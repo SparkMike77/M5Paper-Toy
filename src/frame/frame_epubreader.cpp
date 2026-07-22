@@ -145,6 +145,7 @@ void Frame_EpubReader::UpdateStatusBar() {
     _last_shown_chapter = _chapter_index;
 
     _canvas_status->fillCanvas(0);
+    _canvas_status->setTextSize(26);
 
     String title = GetChapterTitle(_chapter_index);
     if (title.length() > 34) {
