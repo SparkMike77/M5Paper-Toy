@@ -2,6 +2,7 @@
 #include "html_to_text.h"
 #include "miniz.h"
 #include <tinyxml2.h>
+#include <M5EPD_Canvas.h>
 
 using namespace tinyxml2;
 
@@ -67,6 +68,25 @@ static size_t ZipReadCallback(void *pOpaque, mz_uint64 file_ofs, void *pBuf, siz
     return f->read((uint8_t*)pBuf, n);
 }
 
+static bool LocateEntry(mz_zip_archive *zip, const String &archivePath, mz_uint32 &index, size_t &size) {
+    if (!mz_zip_reader_locate_file_v2(zip, archivePath.c_str(), NULL, 0, &index)) {
+        log_e("EPUB: entry not found: %s", archivePath.c_str());
+        return false;
+    }
+    mz_zip_archive_file_stat stat;
+    if (!mz_zip_reader_file_stat(zip, index, &stat)) {
+        return false;
+    }
+    size = (size_t)stat.m_uncomp_size;
+    return true;
+}
+
+static bool EndsWithIgnoreCase(const String &path, const char *suffix) {
+    String lower = path;
+    lower.toLowerCase();
+    return lower.endsWith(suffix);
+}
+
 EpubBook::EpubBook() : _zip(NULL) {
 }
 
@@ -90,15 +110,10 @@ void EpubBook::Close() {
 bool EpubBook::ReadEntryToString(const String &archivePath, String &out) {
     mz_zip_archive *zip = (mz_zip_archive*)_zip;
     mz_uint32 index;
-    if (!mz_zip_reader_locate_file_v2(zip, archivePath.c_str(), NULL, 0, &index)) {
-        log_e("EPUB: entry not found: %s", archivePath.c_str());
+    size_t size;
+    if (!LocateEntry(zip, archivePath, index, size)) {
         return false;
     }
-    mz_zip_archive_file_stat stat;
-    if (!mz_zip_reader_file_stat(zip, index, &stat)) {
-        return false;
-    }
-    size_t size = (size_t)stat.m_uncomp_size;
     char *buf = (char*)ps_malloc(size + 1);
     if (buf == NULL) {
         buf = (char*)malloc(size + 1);
@@ -114,6 +129,30 @@ bool EpubBook::ReadEntryToString(const String &archivePath, String &out) {
     buf[size] = '\0';
     out = String(buf);
     free(buf);
+    return true;
+}
+
+bool EpubBook::ReadEntryBinary(const String &archivePath, uint8_t **outBuf, size_t *outSize) {
+    mz_zip_archive *zip = (mz_zip_archive*)_zip;
+    mz_uint32 index;
+    size_t size;
+    if (!LocateEntry(zip, archivePath, index, size)) {
+        return false;
+    }
+    uint8_t *buf = (uint8_t*)ps_malloc(size);
+    if (buf == NULL) {
+        buf = (uint8_t*)malloc(size);
+    }
+    if (buf == NULL) {
+        log_e("EPUB: out of memory extracting %s (%u bytes)", archivePath.c_str(), (unsigned)size);
+        return false;
+    }
+    if (!mz_zip_reader_extract_to_mem(zip, index, buf, size, 0)) {
+        free(buf);
+        return false;
+    }
+    *outBuf = buf;
+    *outSize = size;
     return true;
 }
 
@@ -286,7 +325,7 @@ String EpubBook::ChapterTitle(int index) const {
     return name;
 }
 
-String EpubBook::GetChapterText(int index) {
+String EpubBook::GetChapterText(int index, std::vector<ImageMarker> *images) {
     if ((index < 0) || (index >= (int)_chapters.size())) {
         return "";
     }
@@ -294,5 +333,50 @@ String EpubBook::GetChapterText(int index) {
     if (!ReadEntryToString(_chapters[index].href, html)) {
         return "";
     }
-    return HtmlToPlainText(html);
+    if (images == NULL) {
+        return HtmlToPlainText(html);
+    }
+
+    std::vector<HtmlImageMarker> rawImages;
+    String text = HtmlToPlainText(html, &rawImages);
+    String chapterDir = DirName(_chapters[index].href);
+    for (size_t i = 0; i < rawImages.size(); i++) {
+        String href = rawImages[i].href;
+        int hash = href.indexOf('#');
+        if (hash >= 0) {
+            href = href.substring(0, hash);
+        }
+        ImageMarker marker;
+        marker.pos = rawImages[i].pos;
+        marker.href = ResolveRelative(chapterDir, href);
+        images->push_back(marker);
+    }
+    return text;
+}
+
+bool EpubBook::DrawImage(const String &href, M5EPD_Canvas *canvas, uint16_t x, uint16_t y, uint16_t maxW, uint16_t maxH) {
+    uint8_t *buf = NULL;
+    size_t size = 0;
+    if (!ReadEntryBinary(href, &buf, &size)) {
+        return false;
+    }
+
+    bool ok;
+    if (EndsWithIgnoreCase(href, ".png")) {
+        // M5EPD_Canvas's PNG decoder (pngle) only reads from a filesystem
+        // path, not memory, so stage the extracted bytes to a scratch file
+        // on the SD card before drawing.
+        static const char *kTmpPath = "/.epub_img_tmp.png";
+        ok = false;
+        File tmp = SD.open(kTmpPath, FILE_WRITE);
+        if (tmp) {
+            tmp.write(buf, size);
+            tmp.close();
+            ok = canvas->drawPngFile(SD, kTmpPath, x, y, maxW, maxH);
+        }
+    } else {
+        ok = canvas->drawJpg(buf, size, x, y, maxW, maxH);
+    }
+    free(buf);
+    return ok;
 }

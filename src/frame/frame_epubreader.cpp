@@ -96,17 +96,46 @@ void Frame_EpubReader::RequestChapterJump(int index) {
     _pending_chapter = index;
 }
 
-uint32_t Frame_EpubReader::renderText(uint32_t cursor, uint32_t length, M5EPD_Canvas *canvas) {
+void Frame_EpubReader::renderImagePage(const String &href, M5EPD_Canvas *canvas) {
+    canvas->fillCanvas(0);
+    if (!_book.DrawImage(href, canvas, 10, 10, 520, kContentH - 20)) {
+        canvas->setTextSize(_text_size);
+        canvas->setTextDatum(CL_DATUM);
+        canvas->drawString("[image could not be loaded]", 10, 10);
+    }
+}
+
+Frame_EpubReader::PageCursor Frame_EpubReader::renderPage(PageCursor cursor, M5EPD_Canvas *canvas, bool *hasMore) {
+    if ((cursor.imgIdx < _chapter_images.size()) && (_chapter_images[cursor.imgIdx].pos == cursor.textPos)) {
+        renderImagePage(_chapter_images[cursor.imgIdx].href, canvas);
+        PageCursor next{cursor.textPos, cursor.imgIdx + 1};
+        *hasMore = (next.imgIdx < _chapter_images.size()) || (next.textPos < _chapter_text.length());
+        return next;
+    }
+
+    uint32_t total = _chapter_text.length();
+    uint32_t limit = _render_len;
+    if (cursor.imgIdx < _chapter_images.size()) {
+        uint32_t toImage = _chapter_images[cursor.imgIdx].pos - cursor.textPos;
+        if (toImage < limit) {
+            limit = toImage;
+        }
+    }
+
     canvas->fillCanvas(0);
     canvas->setTextArea(10, 10, 520, kContentH - 20);
     canvas->setTextSize(_text_size);
 
-    uint32_t total = _chapter_text.length();
-    uint32_t avail = (total > cursor) ? (total - cursor) : 0;
-    uint32_t take = (avail < length) ? avail : length;
-    String chunk = _chapter_text.substring(cursor, cursor + take);
+    uint32_t avail = (total > cursor.textPos) ? (total - cursor.textPos) : 0;
+    uint32_t take = (avail < limit) ? avail : limit;
+    String chunk = _chapter_text.substring(cursor.textPos, cursor.textPos + take);
     canvas->print(chunk);
-    return canvas->getExceedOffset();
+    uint32_t exceed = canvas->getExceedOffset();
+    uint32_t consumed = (exceed != 0) ? exceed : take;
+
+    PageCursor next{cursor.textPos + consumed, cursor.imgIdx};
+    *hasMore = (next.imgIdx < _chapter_images.size()) || (next.textPos < total);
+    return next;
 }
 
 void Frame_EpubReader::LoadChapter(int index) {
@@ -114,25 +143,28 @@ void Frame_EpubReader::LoadChapter(int index) {
         return;
     }
     _chapter_index = index;
-    _chapter_text = _book.GetChapterText(index);
+    _chapter_images.clear();
+    _chapter_text = _book.GetChapterText(index, &_chapter_images);
     _page_cursor.clear();
-    _page_cursor[0] = 0;
+    _page_cursor[0] = PageCursor{0, 0};
     _page = 0;
     _end_accessed = false;
 
-    uint32_t cursor = renderText(0, _render_len, _canvas_current);
-    if (cursor == 0) {
+    bool hasMore = false;
+    PageCursor next = renderPage(_page_cursor[0], _canvas_current, &hasMore);
+    if (!hasMore) {
         _page_end = 0;
         _end_accessed = true;
      } else {
         _page_end = 1;
-        _page_cursor[1] = cursor;
-        uint32_t offset = renderText(_page_cursor[1], _render_len, _canvas_next);
-        if (offset == 0) {
+        _page_cursor[1] = next;
+        bool hasMore2 = false;
+        PageCursor next2 = renderPage(_page_cursor[1], _canvas_next, &hasMore2);
+        if (!hasMore2) {
             _page_end = 1;
             _end_accessed = true;
          } else {
-            _page_cursor[2] = cursor + offset;
+            _page_cursor[2] = next2;
         }
     }
 }
@@ -240,10 +272,11 @@ int Frame_EpubReader::run() {
             memcpy(_canvas_current->frameBuffer(), _canvas_next->frameBuffer(), _canvas_next->getBufferSize());
 
             if ((!_end_accessed) || (_page != _page_end)) {
-                uint32_t offset = renderText(_page_cursor[_page + 1], _render_len, _canvas_next);
-                if (offset != 0) {
+                bool hasMore = false;
+                PageCursor next = renderPage(_page_cursor[_page + 1], _canvas_next, &hasMore);
+                if (hasMore) {
                     if (_page_cursor.count(_page + 2) == 0) {
-                        _page_cursor[_page + 2] = _page_cursor[_page + 1] + offset;
+                        _page_cursor[_page + 2] = next;
                     }
                  } else if (!_end_accessed) {
                     _page_end = _page + 1;
@@ -267,7 +300,8 @@ int Frame_EpubReader::run() {
             memcpy(_canvas_next->frameBuffer(), _canvas_current->frameBuffer(), _canvas_current->getBufferSize());
             memcpy(_canvas_current->frameBuffer(), _canvas_prev->frameBuffer(), _canvas_prev->getBufferSize());
             if (_page != 0) {
-                renderText(_page_cursor[_page - 1], _render_len, _canvas_prev);
+                bool hasMore;
+                renderPage(_page_cursor[_page - 1], _canvas_prev, &hasMore);
             }
             UpdateStatusBar();
          } else if (_chapter_index > 0) {
@@ -276,13 +310,14 @@ int Frame_EpubReader::run() {
             // backward should land at the end of the previous chapter, not
             // its start.
             uint32_t page = 0;
-            uint32_t cursor = 0;
+            PageCursor cursor{0, 0};
             while (true) {
-                uint32_t offset = renderText(cursor, _render_len, _canvas_current);
-                if (offset == 0) {
+                bool hasMore = false;
+                PageCursor next = renderPage(cursor, _canvas_current, &hasMore);
+                if (!hasMore) {
                     break;
                 }
-                cursor += offset;
+                cursor = next;
                 page++;
                 _page_cursor[page] = cursor;
             }
@@ -290,7 +325,8 @@ int Frame_EpubReader::run() {
             _page_end = page;
             _end_accessed = true;
             if (_page > 0) {
-                renderText(_page_cursor[_page - 1], _render_len, _canvas_prev);
+                bool hasMore;
+                renderPage(_page_cursor[_page - 1], _canvas_prev, &hasMore);
             }
             _canvas_current->pushCanvas(0, kContentY, UPDATE_MODE_GC16);
             UpdateStatusBar();

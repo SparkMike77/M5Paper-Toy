@@ -33,7 +33,32 @@ static bool IsBlockCloseTag(const String &tag) {
            (tag == "/h4") || (tag == "/h5") || (tag == "/h6");
 }
 
-String HtmlToPlainText(const String &html) {
+// Looks up `attrName="..."` (or '...') within a raw tag's attribute string.
+// Matches the attribute name case-insensitively but returns the value with
+// its original casing intact, since URLs are case-sensitive.
+static bool ExtractAttr(const String &tag, const char *attrName, String &out) {
+    String tagLower = tag;
+    tagLower.toLowerCase();
+    String needle = String(attrName) + "=";
+    int idx = tagLower.indexOf(needle);
+    if (idx < 0) {
+        return false;
+    }
+    int valStart = idx + needle.length();
+    if ((valStart >= (int)tag.length()) || ((tag.charAt(valStart) != '"') && (tag.charAt(valStart) != '\''))) {
+        return false;
+    }
+    char quote = tag.charAt(valStart);
+    valStart++;
+    int valEnd = tag.indexOf(quote, valStart);
+    if (valEnd < 0) {
+        return false;
+    }
+    out = tag.substring(valStart, valEnd);
+    return true;
+}
+
+String HtmlToPlainText(const String &html, std::vector<HtmlImageMarker> *images) {
     String out;
     out.reserve(html.length() / 2 + 64);
 
@@ -64,6 +89,21 @@ String HtmlToPlainText(const String &html) {
                 int end = html.indexOf(closeTag, close + 1);
                 int afterClose = (end >= 0) ? html.indexOf('>', end) : -1;
                 i = (afterClose >= 0) ? (afterClose + 1) : n;
+                continue;
+            }
+
+            if (tagName == "img") {
+                if (images != NULL) {
+                    String src;
+                    if (ExtractAttr(tag, "src", src)) {
+                        HtmlImageMarker marker;
+                        marker.pos = (uint32_t)out.length();
+                        marker.href = src;
+                        marker.href.replace("&amp;", "&");
+                        images->push_back(marker);
+                    }
+                }
+                i = close + 1;
                 continue;
             }
 

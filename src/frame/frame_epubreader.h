@@ -25,7 +25,24 @@ public:
     void StepChapterAndShow(int delta);
 
 private:
-    uint32_t renderText(uint32_t cursor, uint32_t length, M5EPD_Canvas *canvas);
+    // Position within a chapter's paginated content: `textPos` is a
+    // character offset into _chapter_text, and `imgIdx` counts how many of
+    // _chapter_images (in order) have already been shown as their own page
+    // at this textPos - needed because an image consumes zero characters,
+    // so textPos alone can't distinguish "the image page at this position"
+    // from "the text page that follows it".
+    struct PageCursor {
+        uint32_t textPos;
+        uint32_t imgIdx;
+        PageCursor(uint32_t t = 0, uint32_t i = 0) : textPos(t), imgIdx(i) {}
+    };
+
+    // Renders one page starting at `cursor` into `canvas` (either a slice of
+    // _chapter_text, or a full-page image if one falls exactly at `cursor`).
+    // Returns the cursor for the following page and sets `*hasMore` to
+    // whether any content remains beyond what was just rendered.
+    PageCursor renderPage(PageCursor cursor, M5EPD_Canvas *canvas, bool *hasMore);
+    void renderImagePage(const String &href, M5EPD_Canvas *canvas);
     void LoadChapter(int index);
     void UpdateStatusBar();
 
@@ -36,13 +53,14 @@ private:
     int _chapter_index = 0;
     int _pending_chapter = -1;
     String _chapter_text;
+    std::vector<EpubBook::ImageMarker> _chapter_images;
 
     uint16_t _text_size = 32;
     M5EPD_Canvas *_canvas_prev;
     M5EPD_Canvas *_canvas_current;
     M5EPD_Canvas *_canvas_next;
     M5EPD_Canvas *_canvas_status;
-    std::map<uint32_t, uint32_t> _page_cursor;
+    std::map<uint32_t, PageCursor> _page_cursor;
     uint32_t _render_len = 1000;
     uint32_t _page = 0;
     uint32_t _page_end = 0;
