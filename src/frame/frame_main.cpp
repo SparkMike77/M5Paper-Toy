@@ -11,6 +11,43 @@
 #include "frame_home.h"
 #include <WiFi.h>
 
+// Approximate open-circuit-voltage discharge curve for a single-cell Li-ion/
+// LiPo at rest, in descending voltage order. A single linear 3300-4350mV map
+// looks wrong to the user because real cells hold a fairly flat voltage
+// through most of their capacity and then fall off near empty - this table
+// follows that shape instead, giving a much more realistic percentage.
+struct BatteryCurvePoint {
+    uint16_t mv;
+    uint8_t  pct;
+};
+static const BatteryCurvePoint kBatteryCurve[] = {
+    {4200, 100}, {4150, 95}, {4110, 90}, {4080, 85}, {4020, 80},
+    {3980, 75},  {3950, 70}, {3910, 65}, {3870, 60}, {3850, 55},
+    {3840, 50},  {3820, 45}, {3800, 40}, {3790, 35}, {3770, 30},
+    {3750, 25},  {3730, 20}, {3710, 15}, {3690, 10}, {3610, 5},
+    {3300, 0},
+};
+
+static uint8_t VoltageToPercent(uint32_t mv) {
+    const int n = sizeof(kBatteryCurve) / sizeof(kBatteryCurve[0]);
+    if (mv >= kBatteryCurve[0].mv) {
+        return 100;
+    }
+    if (mv <= kBatteryCurve[n - 1].mv) {
+        return 0;
+    }
+    for (int i = 0; i < n - 1; i++) {
+        uint16_t hiMv = kBatteryCurve[i].mv;
+        uint16_t loMv = kBatteryCurve[i + 1].mv;
+        if ((mv <= hiMv) && (mv >= loMv)) {
+            uint8_t hiPct = kBatteryCurve[i].pct;
+            uint8_t loPct = kBatteryCurve[i + 1].pct;
+            return loPct + (uint32_t)(mv - loMv) * (hiPct - loPct) / (hiMv - loMv);
+        }
+    }
+    return 0;
+}
+
 enum {
     kKeyFactoryTest = 0,
     kKeySetting,
@@ -282,23 +319,39 @@ void Frame_Main::StatusBar(m5epd_update_mode_t mode) {
     _bar->pushImage(498, 8, 32, 32, ImageResource_status_bar_battery_32x32);
     uint32_t vol = M5.getBatteryVoltage();
 
-    if (vol < 3300) {
-        vol = 3300;
-     } else if (vol > 4350) {
-        vol = 4350;
+    // No charge-status pin is exposed on this hardware, so charging is
+    // inferred from the voltage trend between polls: plugging in makes the
+    // terminal voltage rise noticeably within a minute, while a battery
+    // that's just discharging normally won't rise at all. A wider hysteresis
+    // on the "no longer charging" side avoids flicker from the small dips
+    // that happen as the charger tapers off near full.
+    if (_last_battery_voltage > 0) {
+        if (vol > _last_battery_voltage + 5) {
+            _is_charging = true;
+         } else if (vol + 20 < _last_battery_voltage) {
+            _is_charging = false;
+        }
     }
-    float battery = (float)(vol - 3300) / (float)(4350 - 3300);
-    if (battery <= 0.01) {
-        battery = 0.01;
-    }
-    if (battery > 1) {
-        battery = 1;
-    }
-    uint8_t px = battery * 25;
-    sprintf(buf, "%d%%", (int)(battery * 100));
+    _last_battery_voltage = vol;
+
+    uint8_t pct = VoltageToPercent(vol);
+    uint8_t px = pct * 25 / 100;
+    sprintf(buf, "%d%%", pct);
+
+    // Draw the percentage text and fill bar first, then the charging icon
+    // last - drawString's freetype path fills a background rect behind the
+    // glyphs to avoid e-ink ghosting, which would paint over the icon if it
+    // were drawn first and the two regions touched.
     _bar->drawString(buf, 498 - 10, 27);
     _bar->fillRect(498 + 3, 8 + 10, px, 13, 15);
-    // _bar->pushImage(498, 8, 32, 32, 2, ImageResource_status_bar_battery_charging_32x32);
+
+    if (_is_charging) {
+        // textWidth() is a stub for this freetype-based font renderer (it
+        // always returns 0 - see In_eSPI.cpp's "TODO: Measure freetype
+        // width"), so a fixed offset wide enough to clear the longest
+        // possible percentage string ("100%") is used instead of measuring it.
+        _bar->pushImage(498 - 10 - 70 - 32, 8, 32, 32, ImageResource_status_bar_battery_charging_32x32);
+    }
 
     // Time
     rtc_time_t time_struct;

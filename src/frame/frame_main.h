@@ -18,6 +18,8 @@ private:
     M5EPD_Canvas *_names;
     uint32_t _next_update_time;
     uint32_t _time;
+    uint32_t _last_battery_voltage = 0;
+    bool _is_charging = false;
 };
 
 #endif //_FRAME_MAIN_H_
