@@ -89,20 +89,27 @@ static void HandleUploadDone() {
 }
 
 static void HandleMkdir() {
-    if (server.hasArg("path") && !server.arg("path").isEmpty()) {
-        SD.mkdir(NormalizePath(server.arg("path")));
+    if (!server.hasArg("path") || server.arg("path").isEmpty()) {
+        server.send(400, "text/plain", "Missing 'path' field");
+        return;
     }
-    server.sendHeader("Location", "/");
-    server.send(303);
+    String path = NormalizePath(server.arg("path"));
+    bool ok = SD.mkdir(path);
+    log_d("mkdir %s -> %d", path.c_str(), ok);
+    server.send(ok ? 200 : 500, "text/plain", (ok ? "Created " : "Failed to create ") + path);
 }
 
 static void HandleMove() {
-    if (server.hasArg("from") && server.hasArg("to")
-            && !server.arg("from").isEmpty() && !server.arg("to").isEmpty()) {
-        SD.rename(NormalizePath(server.arg("from")), NormalizePath(server.arg("to")));
+    if (!server.hasArg("from") || !server.hasArg("to")
+            || server.arg("from").isEmpty() || server.arg("to").isEmpty()) {
+        server.send(400, "text/plain", "Missing 'from'/'to' field");
+        return;
     }
-    server.sendHeader("Location", "/");
-    server.send(303);
+    String from = NormalizePath(server.arg("from"));
+    String to = NormalizePath(server.arg("to"));
+    bool ok = SD.rename(from, to);
+    log_d("move %s -> %s : %d", from.c_str(), to.c_str(), ok);
+    server.send(ok ? 200 : 500, "text/plain", (ok ? "Moved " : "Failed to move ") + from + " -> " + to);
 }
 
 static void EnsureHandlersRegistered() {
