@@ -304,6 +304,48 @@ void Frame_Main::StatusBar(m5epd_update_mode_t mode) {
     if ((millis() - _time) < _next_update_time) {
         return;
     }
+
+    uint32_t vol = M5.getBatteryVoltage();
+
+    // No charge-status pin is exposed on this hardware, so charging is
+    // inferred from the voltage trend between polls: plugging in makes the
+    // terminal voltage rise noticeably within a minute, while a battery
+    // that's just discharging normally won't rise at all. A wider hysteresis
+    // on the "no longer charging" side avoids flicker from the small dips
+    // that happen as the charger tapers off near full.
+    if (_last_battery_voltage > 0) {
+        if (vol > _last_battery_voltage + 5) {
+            _is_charging = true;
+         } else if (vol + 20 < _last_battery_voltage) {
+            _is_charging = false;
+        }
+    }
+    _last_battery_voltage = vol;
+
+    uint8_t pct = VoltageToPercent(vol);
+
+    rtc_time_t time_struct;
+    rtc_date_t date_struct;
+    M5.RTC.getTime(&time_struct);
+    M5.RTC.getDate(&date_struct);
+
+    // Always re-arm for next minute here, even when the redraw below ends
+    // up skipped - otherwise an unchanged percentage would leave _time
+    // stale and this would re-check (and re-sample the battery) on every
+    // loop iteration instead of once a minute.
+    _time = millis();
+    _next_update_time = (60 - time_struct.sec) * 1000;
+
+    // The battery percentage rarely changes minute to minute, so most
+    // ticks would otherwise just be repainting an identical bar - skip
+    // those to cut down on the e-ink flicker a redraw causes. The clock
+    // is drawn in the same pass, so it only visibly ticks over when the
+    // percentage changes too.
+    if (pct == _last_battery_pct) {
+        return;
+    }
+    _last_battery_pct = pct;
+
     char buf[20];
     _bar->fillCanvas(0);
     _bar->drawFastHLine(0, 43, 540, 15);
@@ -337,24 +379,6 @@ void Frame_Main::StatusBar(m5epd_update_mode_t mode) {
     // Battery
     _bar->setTextDatum(CR_DATUM);
     _bar->pushImage(498, 8, 32, 32, ImageResource_status_bar_battery_32x32);
-    uint32_t vol = M5.getBatteryVoltage();
-
-    // No charge-status pin is exposed on this hardware, so charging is
-    // inferred from the voltage trend between polls: plugging in makes the
-    // terminal voltage rise noticeably within a minute, while a battery
-    // that's just discharging normally won't rise at all. A wider hysteresis
-    // on the "no longer charging" side avoids flicker from the small dips
-    // that happen as the charger tapers off near full.
-    if (_last_battery_voltage > 0) {
-        if (vol > _last_battery_voltage + 5) {
-            _is_charging = true;
-         } else if (vol + 20 < _last_battery_voltage) {
-            _is_charging = false;
-        }
-    }
-    _last_battery_voltage = vol;
-
-    uint8_t pct = VoltageToPercent(vol);
     uint8_t px = pct * 25 / 100;
     sprintf(buf, "%d%%", pct);
 
@@ -374,17 +398,10 @@ void Frame_Main::StatusBar(m5epd_update_mode_t mode) {
     }
 
     // Time
-    rtc_time_t time_struct;
-    rtc_date_t date_struct;
-    M5.RTC.getTime(&time_struct);
-    M5.RTC.getDate(&date_struct);
     sprintf(buf, "%2d:%02d", time_struct.hour, time_struct.min);
     _bar->setTextDatum(CC_DATUM);
     _bar->drawString(buf, 270, 27);
     _bar->pushCanvas(0, 0, mode);
-
-    _time = millis();
-    _next_update_time = (60 - time_struct.sec) * 1000;
 }
 
 
@@ -396,6 +413,12 @@ int Frame_Main::init(epdgui_args_vector_t &args) {
     }
     _time = 0;
     _next_update_time = 0;
+    // WriteFullGram4bpp() above just overwrote the status bar's on-screen
+    // area with the wallpaper - force StatusBar() to actually repaint it
+    // here even if the percentage happens to match what it showed before,
+    // otherwise the skip-when-unchanged check below would leave the
+    // wallpaper showing through where the bar used to be.
+    _last_battery_pct = 0xFF;
     StatusBar(UPDATE_MODE_NONE);
     AppName(UPDATE_MODE_NONE);
     return 13;

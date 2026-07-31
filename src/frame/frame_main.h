@@ -20,6 +20,10 @@ private:
     uint32_t _time;
     uint32_t _last_battery_voltage = 0;
     bool _is_charging = false;
+    // 0xFF is not a reachable percentage (0-100), so the first StatusBar()
+    // call after each frame entry always redraws regardless of what the
+    // battery was last showing.
+    uint8_t _last_battery_pct = 0xFF;
 };
 
 #endif //_FRAME_MAIN_H_
