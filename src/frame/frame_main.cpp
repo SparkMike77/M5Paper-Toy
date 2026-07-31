@@ -9,6 +9,7 @@
 #include "frame_fileindex.h"
 #include "frame_compare.h"
 #include "frame_home.h"
+#include "frame_maplist.h"
 #include <WiFi.h>
 
 // Approximate open-circuit-voltage discharge curve for a single-cell Li-ion/
@@ -58,7 +59,8 @@ enum {
     kKeyHome,
     kKeyLifeGame,
     kKeyTimer,
-    kKeyNotes
+    kKeyNotes,
+    kKeyMaps
 };
 
 #define KEY_W 92
@@ -160,6 +162,12 @@ void key_notes_cb(epdgui_args_vector_t &args) {
     *((int*)(args[0])) = 0;
 }
 
+void key_maps_cb(epdgui_args_vector_t &args) {
+    Frame_Base *frame = new Frame_MapList();
+    EPDGUI_PushFrame(frame);
+    *((int*)(args[0])) = 0;
+}
+
 
 Frame_Main::Frame_Main(void): Frame_Base(false) {
     _frame_name = "Frame_Main";
@@ -243,6 +251,12 @@ Frame_Main::Frame_Main(void): Frame_Base(false) {
     _key[kKeyNotes]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key[kKeyNotes]->Bind(EPDGUI_Button::EVENT_RELEASED, key_notes_cb);
 
+    // No dedicated icon art yet - falls back to the button's default
+    // bordered/centered-text rendering (same as the placeholder "Test" look).
+    _key[kKeyMaps]->setLabel("Maps");
+    _key[kKeyMaps]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
+    _key[kKeyMaps]->Bind(EPDGUI_Button::EVENT_RELEASED, key_maps_cb);
+
     _time = 0;
     _next_update_time = 0;
 }
@@ -277,6 +291,7 @@ void Frame_Main::AppName(m5epd_update_mode_t mode) {
     _names->fillCanvas(0);
     _names->drawString("Timer", 20 + 46, 16);
     _names->drawString("Notes", 20 + 46 + 136, 16);
+    _names->drawString("Maps", 20 + 46 + 2 * 136, 16);
     _names->pushCanvas(0, 487, mode);
 }
 
