@@ -15,10 +15,13 @@
 #include "frame_epubreader.h"
 #include "frame_epubtoc.h"
 #include "frame_pdfreader.h"
+#include "frame_maplist.h"
+#include "frame_mapreader.h"
 #include "frame_fileindex.h"
 #include "frame_txtreader.h"
 #include "frame_compare.h"
 #include "frame_pictureviewer.h"
 #include "frame_home.h"
+#include "frame_homeassistant_config.h"
 
 #endif // _FRAME_H_

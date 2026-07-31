@@ -1,4 +1,58 @@
 #include "frame_home.h"
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+namespace {
+String HomeAssistantUrl(const String& path) {
+    return GetHomeAssistantURL() + path;
+}
+
+void ApplyHomeAssistantHeaders(HTTPClient& http) {
+    String token = GetHomeAssistantToken();
+    if (!token.isEmpty()) {
+        http.addHeader("Authorization", String("Bearer ") + token);
+    }
+    http.addHeader("Content-Type", "application/json");
+}
+
+bool TryProbeHomeAssistant(const String& host_spec, const String& path) {
+    WiFiClient client;
+    client.setTimeout(2000);
+
+    String host = host_spec;
+    uint16_t port = 8123;
+    int colon = host.lastIndexOf(':');
+    if (colon >= 0) {
+        host = host.substring(0, colon);
+        port = host_spec.substring(colon + 1).toInt();
+    }
+
+    if (!client.connect(host.c_str(), port)) {
+        return false;
+    }
+
+    client.print(String("GET ") + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n");
+
+    uint32_t start = millis();
+    while (millis() - start < 2500) {
+        if (client.available()) {
+            String response_line = client.readStringUntil('\n');
+            if (response_line.startsWith("HTTP/")) {
+                int status_code = response_line.substring(9, 12).toInt();
+                client.stop();
+                return status_code >= 200 && status_code < 600;
+            }
+            break;
+        }
+        if (!client.connected()) {
+            break;
+        }
+    }
+
+    client.stop();
+    return false;
+}
+}
 
 void Frame_Home::InitSwitch(EPDGUI_Switch* sw, String title, String subtitle, const uint8_t *img1, const uint8_t *img2) {
     memcpy(sw->Canvas(0)->frameBuffer(), ImageResource_home_button_background_228x228, 228 * 228 / 2);
@@ -50,8 +104,163 @@ void key_home_air_state1_cb(epdgui_args_vector_t &args) {
     b2->SetEnable(true);
 }
 
+void key_home_hass_toggle_cb(epdgui_args_vector_t &args) {
+    HomeAssistantSwitchBinding* binding = (HomeAssistantSwitchBinding*)(args[0]);
+    if (binding == NULL || binding->sw == NULL) {
+        return;
+    }
+
+    bool enabled = binding->sw->getState() == 1;
+    if (binding->frame == NULL) {
+        return;
+    }
+
+    binding->frame->SetHomeAssistantState(binding, enabled);
+}
+
+bool Frame_Home::CheckHomeAssistantReachability() {
+    if (WiFi.status() != WL_CONNECTED) {
+        return false;
+    }
+
+    const char* hosts[] = {"homeassistant.local", "homeassistant", "homeassistant.local:8123", "homeassistant:8123"};
+    const char* paths[] = {"/api/", "/", "/api"};
+
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 3; j++) {
+            if (TryProbeHomeAssistant(hosts[i], paths[j])) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+void Frame_Home::ApplyOfflineVisualState() {
+    if (_offline_visual_applied) {
+        return;
+    }
+
+    _canvas_title->fillCanvas(0);
+    _canvas_title->drawFastHLine(0, 64, 540, 15);
+    _canvas_title->drawFastHLine(0, 63, 540, 15);
+    _canvas_title->drawFastHLine(0, 62, 540, 15);
+    _canvas_title->setTextSize(26);
+    _canvas_title->setTextDatum(CC_DATUM);
+    _canvas_title->setTextColor(15);
+    _canvas_title->drawString("Home Assistant Offline", 270, 34);
+    _canvas_title->pushCanvas(0, 8, UPDATE_MODE_NONE);
+
+    _sw_light1->Canvas(0)->ReverseColor();
+    _sw_light1->Canvas(1)->ReverseColor();
+    _sw_light2->Canvas(0)->ReverseColor();
+    _sw_light2->Canvas(1)->ReverseColor();
+    _sw_socket1->Canvas(0)->ReverseColor();
+    _sw_socket1->Canvas(1)->ReverseColor();
+    _sw_socket2->Canvas(0)->ReverseColor();
+    _sw_socket2->Canvas(1)->ReverseColor();
+    _sw_air_1->Canvas(0)->ReverseColor();
+    _sw_air_1->Canvas(1)->ReverseColor();
+    _sw_air_2->Canvas(0)->ReverseColor();
+    _sw_air_2->Canvas(1)->ReverseColor();
+
+    _key_air_1_plus->CanvasNormal()->ReverseColor();
+    _key_air_1_plus->CanvasPressed()->ReverseColor();
+    _key_air_1_minus->CanvasNormal()->ReverseColor();
+    _key_air_1_minus->CanvasPressed()->ReverseColor();
+    _key_air_2_plus->CanvasNormal()->ReverseColor();
+    _key_air_2_plus->CanvasPressed()->ReverseColor();
+    _key_air_2_minus->CanvasNormal()->ReverseColor();
+    _key_air_2_minus->CanvasPressed()->ReverseColor();
+
+    _key_exit->CanvasNormal()->ReverseColor();
+    _key_exit->CanvasPressed()->ReverseColor();
+
+    _offline_visual_applied = true;
+}
+
+bool Frame_Home::RefreshHomeAssistantState(HomeAssistantSwitchBinding* binding) {
+    if (binding == NULL || binding->sw == NULL || binding->entity_id == NULL || binding->domain == NULL) {
+        return false;
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+        return false;
+    }
+
+    HTTPClient http;
+    WiFiClient client;
+    http.setTimeout(3000);
+    http.begin(client, HomeAssistantUrl(String("/api/states/") + binding->entity_id));
+    ApplyHomeAssistantHeaders(http);
+
+    int http_code = http.GET();
+    if (http_code != HTTP_CODE_OK) {
+        http.end();
+        return false;
+    }
+
+    String payload = http.getString();
+    http.end();
+
+    int state_pos = payload.indexOf("\"state\"");
+    if (state_pos < 0) {
+        return false;
+    }
+
+    int value_pos = payload.indexOf(':', state_pos);
+    int value_end = payload.indexOf(',', value_pos);
+    if (value_end < 0) {
+        value_end = payload.indexOf('}', value_pos);
+    }
+    if (value_pos < 0 || value_end < 0) {
+        return false;
+    }
+
+    String state_value = payload.substring(value_pos + 1, value_end);
+    state_value.trim();
+    state_value.remove(0, 1);
+    state_value.remove(state_value.length() - 1, 1);
+
+    bool enabled = state_value.equalsIgnoreCase("on") || state_value.equalsIgnoreCase("true");
+    binding->sw->setState(enabled ? 1 : 0);
+    return true;
+}
+
+bool Frame_Home::SetHomeAssistantState(HomeAssistantSwitchBinding* binding, bool enabled) {
+    if (binding == NULL || binding->sw == NULL || binding->entity_id == NULL || binding->domain == NULL) {
+        return false;
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+        return false;
+    }
+
+    String service = enabled ? "turn_on" : "turn_off";
+    String payload = String("{\"entity_id\":\"") + binding->entity_id + "\"}";
+    HTTPClient http;
+    WiFiClient client;
+    http.setTimeout(3000);
+    http.begin(client, HomeAssistantUrl(String("/api/services/") + binding->domain + "/" + service));
+    ApplyHomeAssistantHeaders(http);
+
+    int http_code = http.POST(payload);
+    bool success = http_code >= 200 && http_code < 300;
+    http.end();
+
+    if (!success) {
+        binding->sw->setState(enabled ? 0 : 1);
+        return false;
+    }
+
+    return RefreshHomeAssistantState(binding);
+}
+
 Frame_Home::Frame_Home(void) {
     _frame_name = "Frame_Home";
+    _home_assistant_online = false;
+    _offline_visual_applied = false;
 
     _sw_light1       = new EPDGUI_Switch(2, 20, 44 + 72, 228, 228);
     _sw_light2       = new EPDGUI_Switch(2, 288, 44 + 72, 228, 228);
@@ -154,6 +363,19 @@ Frame_Home::Frame_Home(void) {
     _sw_air_2->AddArgs(EPDGUI_Switch::EVENT_PRESSED, 2, _sw_air_2);
     _sw_air_2->Bind(1, key_home_air_state1_cb);
 
+    _ha_switches[0] = { _sw_light1, GetHomeAssistantEntity(0).c_str(), "light", this };
+    _ha_switches[1] = { _sw_light2, GetHomeAssistantEntity(1).c_str(), "light", this };
+    _ha_switches[2] = { _sw_socket1, GetHomeAssistantEntity(2).c_str(), "switch", this };
+    _ha_switches[3] = { _sw_socket2, GetHomeAssistantEntity(3).c_str(), "switch", this };
+
+    for (int i = 0; i < 4; i++) {
+        _ha_switches[i].sw->SetCustomData(&_ha_switches[i]);
+        _ha_switches[i].sw->AddArgs(EPDGUI_Switch::EVENT_PRESSED, 0, &_ha_switches[i]);
+        _ha_switches[i].sw->Bind(1, key_home_hass_toggle_cb);
+        _ha_switches[i].sw->AddArgs(EPDGUI_Switch::EVENT_PRESSED, 1, &_ha_switches[i]);
+        _ha_switches[i].sw->Bind(0, key_home_hass_toggle_cb);
+    }
+
     exitbtn("Home");
     _canvas_title->drawString("Control Panel", 270, 34);
 
@@ -176,8 +398,27 @@ Frame_Home::~Frame_Home(void) {
 
 int Frame_Home::init(epdgui_args_vector_t &args) {
     _is_run = 1;
+    _home_assistant_online = CheckHomeAssistantReachability();
     M5.EPD.Clear();
+
+    _canvas_title->fillCanvas(0);
+    _canvas_title->drawFastHLine(0, 64, 540, 15);
+    _canvas_title->drawFastHLine(0, 63, 540, 15);
+    _canvas_title->drawFastHLine(0, 62, 540, 15);
+    _canvas_title->setTextSize(26);
+    _canvas_title->setTextDatum(CC_DATUM);
+    _canvas_title->setTextColor(15);
+    _canvas_title->drawString(_home_assistant_online ? "Control Panel" : "Home Assistant Offline", 270, 34);
     _canvas_title->pushCanvas(0, 8, UPDATE_MODE_NONE);
+
+    if (!_home_assistant_online) {
+        ApplyOfflineVisualState();
+    } else {
+        for (int i = 0; i < 4; i++) {
+            RefreshHomeAssistantState(&_ha_switches[i]);
+        }
+    }
+
     EPDGUI_AddObject(_sw_light1);
     EPDGUI_AddObject(_sw_light2);
     EPDGUI_AddObject(_sw_socket1);

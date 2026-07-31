@@ -30,6 +30,8 @@ public:
     void SetID(uint32_t id) { _id = id;}
     void SetCustomString(String s) {_user_custom_str = s;}
     String GetCustomString(void) {return _user_custom_str;}
+    void SetCustomData(void* data) {_user_custom_data = data;}
+    void* GetCustomData(void) {return _user_custom_data;}
 
     inline int16_t getX() {return _x;}
     inline int16_t getY() {return _y;}
@@ -40,6 +42,7 @@ public:
 
 protected:
     String _user_custom_str;
+    void* _user_custom_data = NULL;
     int16_t _x, _y, _w, _h;
     int16_t _rx, _by;
     uint32_t _id;

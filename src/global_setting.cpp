@@ -50,6 +50,14 @@ const char *wallpapers_name[] = {
 uint16_t global_wallpaper = DEFAULT_WALLPAPER;
 String global_wifi_ssid;
 String global_wifi_password;
+String global_homeassistant_url = "http://homeassistant.local:8123";
+String global_homeassistant_token;
+String global_homeassistant_entities[4] = {
+    "light.ceiling_light",
+    "light.table_lamp",
+    "switch.rice_cooker",
+    "switch.computer"
+};
 uint8_t global_wifi_configed = false;
 uint16_t global_reader_textsize = 32;
 uint8_t global_time_synced = false;
@@ -182,6 +190,25 @@ esp_err_t LoadSetting(void) {
     global_wifi_password = String(buf);
     if (!global_wifi_ssid.isEmpty() && !global_wifi_password.isEmpty())
         global_wifi_configed = true;
+
+    size_t length_ha = 128;
+    char buf_ha[128];
+    if (nvs_get_str(nvs_arg, "ha_url", buf_ha, &length_ha) == ESP_OK) {
+        global_homeassistant_url = String(buf_ha);
+    }
+    length_ha = 128;
+    if (nvs_get_str(nvs_arg, "ha_token", buf_ha, &length_ha) == ESP_OK) {
+        global_homeassistant_token = String(buf_ha);
+    }
+
+    const char* homeassistant_entity_keys[4] = {"ha_ent0", "ha_ent1", "ha_ent2", "ha_ent3"};
+    for (uint8_t i = 0; i < 4; i++) {
+        length_ha = 128;
+        if (nvs_get_str(nvs_arg, homeassistant_entity_keys[i], buf_ha, &length_ha) == ESP_OK) {
+            global_homeassistant_entities[i] = String(buf_ha);
+        }
+    }
+
     nvs_close(nvs_arg);
     return ESP_OK;
 }
@@ -198,6 +225,12 @@ esp_err_t SaveSetting(void) {
     NVS_CHECK(nvs_set_u8(nvs_arg, "diag_en", global_diagnostics_enabled));
     NVS_CHECK(nvs_set_str(nvs_arg, "ssid", global_wifi_ssid.c_str()));
     NVS_CHECK(nvs_set_str(nvs_arg, "pswd", global_wifi_password.c_str()));
+    NVS_CHECK(nvs_set_str(nvs_arg, "ha_url", global_homeassistant_url.c_str()));
+    NVS_CHECK(nvs_set_str(nvs_arg, "ha_token", global_homeassistant_token.c_str()));
+    const char* homeassistant_entity_keys[4] = {"ha_ent0", "ha_ent1", "ha_ent2", "ha_ent3"};
+    for (uint8_t i = 0; i < 4; i++) {
+        NVS_CHECK(nvs_set_str(nvs_arg, homeassistant_entity_keys[i], global_homeassistant_entities[i].c_str()));
+    }
     NVS_CHECK(nvs_commit(nvs_arg));
     nvs_close(nvs_arg);
     return ESP_OK;
@@ -219,6 +252,34 @@ String GetWifiSSID(void) {
 
 String GetWifiPassword(void) {
     return global_wifi_password;
+}
+
+void SetHomeAssistantConfig(String url, String token) {
+    global_homeassistant_url = url;
+    global_homeassistant_token = token;
+    SaveSetting();
+}
+
+void SetHomeAssistantEntity(uint8_t index, String entity_id) {
+    if (index < 4) {
+        global_homeassistant_entities[index] = entity_id;
+        SaveSetting();
+    }
+}
+
+String GetHomeAssistantURL(void) {
+    return global_homeassistant_url.isEmpty() ? String("http://homeassistant.local:8123") : global_homeassistant_url;
+}
+
+String GetHomeAssistantToken(void) {
+    return global_homeassistant_token;
+}
+
+String GetHomeAssistantEntity(uint8_t index) {
+    if (index < 4) {
+        return global_homeassistant_entities[index].isEmpty() ? String("") : global_homeassistant_entities[index];
+    }
+    return String("");
 }
 
 bool SyncNTPTime(void) {

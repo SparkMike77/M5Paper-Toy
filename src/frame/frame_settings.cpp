@@ -1,6 +1,8 @@
 #include "frame_settings.h"
 #include "frame_settings_wifi.h"
 #include "frame_settings_wallpaper.h"
+#include "frame_keyboard.h"
+#include "frame_homeassistant_config.h"
 #include "WiFi.h"
 
 #define KEY_W 92
@@ -43,6 +45,16 @@ void key_wallpaper_cb(epdgui_args_vector_t &args) {
     if (frame == NULL) {
         frame = new Frame_Settings_Wallpaper();
         EPDGUI_AddFrame("Frame_Settings_Wallpaper", frame);
+    }
+    EPDGUI_PushFrame(frame);
+    *((int*)(args[0])) = 0;
+}
+
+void key_homeassistant_cb(epdgui_args_vector_t &args) {
+    Frame_Base *frame = EPDGUI_GetFrame("Frame_HomeAssistantConfig");
+    if (frame == NULL) {
+        frame = new Frame_HomeAssistantConfig();
+        EPDGUI_AddFrame("Frame_HomeAssistantConfig", frame);
     }
     EPDGUI_PushFrame(frame);
     *((int*)(args[0])) = 0;
@@ -196,8 +208,9 @@ Frame_Settings::Frame_Settings(void) {
     _key_sd_force_format = new EPDGUI_Button(4, 350, 532, 61);
     _key_diagnostics = new EPDGUI_Button(4, 410, 532, 61);
     _key_wallpaper = new EPDGUI_Button(4, 470, 532, 61);
-    _key_syncntp = new EPDGUI_Button(4, 530, 532, 61);
-    _key_restart = new EPDGUI_Button(4, 630, 532, 61);
+    _key_homeassistant = new EPDGUI_Button(4, 530, 532, 61);
+    _key_syncntp = new EPDGUI_Button(4, 590, 532, 61);
+    _key_restart = new EPDGUI_Button(4, 690, 532, 61);
     _key_shutdown = new EPDGUI_Button(4, 690, 532, 61);
 
     key_timezone_plus = new EPDGUI_Button("+", 448, kTimeZoneY + 2, 88, 52);
@@ -256,6 +269,9 @@ Frame_Settings::Frame_Settings(void) {
     _key_wallpaper->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key_wallpaper->Bind(EPDGUI_Button::EVENT_RELEASED, &key_wallpaper_cb);
 
+    _key_homeassistant->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
+    _key_homeassistant->Bind(EPDGUI_Button::EVENT_RELEASED, &key_homeassistant_cb);
+
     _key_shutdown->Bind(EPDGUI_Button::EVENT_RELEASED, &key_shutdown_cb);
     _key_restart->Bind(EPDGUI_Button::EVENT_RELEASED, &key_restart_cb);
     _key_syncntp->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, _canvas_title);
@@ -272,6 +288,7 @@ Frame_Settings::~Frame_Settings(void) {
     delete _key_sd_force_format;
     delete _key_diagnostics;
     delete _key_wallpaper;
+    delete _key_homeassistant;
     delete _key_shutdown;
     delete _key_restart;
     delete _key_syncntp;
@@ -306,6 +323,7 @@ int Frame_Settings::init(epdgui_args_vector_t &args) {
     EPDGUI_AddObject(_key_sd_force_format);
     EPDGUI_AddObject(_key_diagnostics);
     EPDGUI_AddObject(_key_wallpaper);
+    EPDGUI_AddObject(_key_homeassistant);
     EPDGUI_AddObject(_key_shutdown);
     EPDGUI_AddObject(_key_restart);
     EPDGUI_AddObject(_key_syncntp);
