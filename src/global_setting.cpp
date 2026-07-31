@@ -3,6 +3,7 @@
 #include "esp32-hal-log.h"
 #include "esp_log.h"
 #include <WiFi.h>
+#include <SD.h>
 
 #define DEFAULT_WALLPAPER 2
 SemaphoreHandle_t _xSemaphore_LoadingAnime = NULL;
@@ -68,6 +69,7 @@ uint8_t global_upload_enabled = 0;
 uint8_t global_sd_autoformat_enabled = 0;
 uint8_t global_sd_force_format_pending = 0;
 uint8_t global_diagnostics_enabled = 0;
+uint8_t global_wifi_powersave_enabled = 0;
 
 
 int8_t GetTimeZone(void) {
@@ -124,6 +126,15 @@ void SetDiagnosticsEnabled(uint8_t val) {
     ApplyDiagnosticsLevel();
 }
 
+uint8_t IsWifiPowerSaveEnabled(void) {
+    return global_wifi_powersave_enabled;
+}
+
+void SetWifiPowerSaveEnabled(uint8_t val) {
+    global_wifi_powersave_enabled = val;
+    SaveSetting();
+}
+
 // log_d()/log_e() etc. are compiled in at CORE_DEBUG_LEVEL (set in
 // platformio.ini), but esp_log's runtime level is an independent, live
 // gate on top of that - no reboot needed to change it.
@@ -175,6 +186,7 @@ esp_err_t LoadSetting(void) {
     nvs_get_u8(nvs_arg, "sd_autofmt", &global_sd_autoformat_enabled);
     nvs_get_u8(nvs_arg, "sd_force_fmt", &global_sd_force_format_pending);
     nvs_get_u8(nvs_arg, "diag_en", &global_diagnostics_enabled);
+    nvs_get_u8(nvs_arg, "wifi_pwrsave", &global_wifi_powersave_enabled);
     ApplyDiagnosticsLevel();
 
     if (global_wallpaper >= WALLPAPER_NUM) {
@@ -191,19 +203,23 @@ esp_err_t LoadSetting(void) {
     if (!global_wifi_ssid.isEmpty() && !global_wifi_password.isEmpty())
         global_wifi_configed = true;
 
-    size_t length_ha = 128;
-    char buf_ha[128];
+    // 256 bytes, not 128 - Home Assistant long-lived access tokens are JWTs
+    // that typically run ~180 chars, and nvs_get_str() fails closed (returns
+    // an error, leaving the global untouched) rather than truncating when
+    // the buffer is too small.
+    size_t length_ha = 256;
+    char buf_ha[256];
     if (nvs_get_str(nvs_arg, "ha_url", buf_ha, &length_ha) == ESP_OK) {
         global_homeassistant_url = String(buf_ha);
     }
-    length_ha = 128;
+    length_ha = sizeof(buf_ha);
     if (nvs_get_str(nvs_arg, "ha_token", buf_ha, &length_ha) == ESP_OK) {
         global_homeassistant_token = String(buf_ha);
     }
 
     const char* homeassistant_entity_keys[4] = {"ha_ent0", "ha_ent1", "ha_ent2", "ha_ent3"};
     for (uint8_t i = 0; i < 4; i++) {
-        length_ha = 128;
+        length_ha = sizeof(buf_ha);
         if (nvs_get_str(nvs_arg, homeassistant_entity_keys[i], buf_ha, &length_ha) == ESP_OK) {
             global_homeassistant_entities[i] = String(buf_ha);
         }
@@ -223,6 +239,7 @@ esp_err_t SaveSetting(void) {
     NVS_CHECK(nvs_set_u8(nvs_arg, "sd_autofmt", global_sd_autoformat_enabled));
     NVS_CHECK(nvs_set_u8(nvs_arg, "sd_force_fmt", global_sd_force_format_pending));
     NVS_CHECK(nvs_set_u8(nvs_arg, "diag_en", global_diagnostics_enabled));
+    NVS_CHECK(nvs_set_u8(nvs_arg, "wifi_pwrsave", global_wifi_powersave_enabled));
     NVS_CHECK(nvs_set_str(nvs_arg, "ssid", global_wifi_ssid.c_str()));
     NVS_CHECK(nvs_set_str(nvs_arg, "pswd", global_wifi_password.c_str()));
     NVS_CHECK(nvs_set_str(nvs_arg, "ha_url", global_homeassistant_url.c_str()));
@@ -256,6 +273,30 @@ String GetWifiPassword(void) {
 
 void SetHomeAssistantConfig(String url, String token) {
     global_homeassistant_url = url;
+    global_homeassistant_token = token;
+    SaveSetting();
+}
+
+// Lets the long-lived token be dropped onto the SD card (via the same
+// uploader used for ebooks/files, at the SD root) as plain text instead of
+// typed on the on-device keyboard, and re-applied on every boot so
+// overwriting the file is enough to rotate it.
+void LoadHomeAssistantTokenFromSD(void) {
+    const char *kTokenPath = "/HomeAssistant_Token.txt";
+    if (!SD.exists(kTokenPath)) {
+        return;
+    }
+    File f = SD.open(kTokenPath, FILE_READ);
+    if (!f) {
+        log_e("Failed to open %s", kTokenPath);
+        return;
+    }
+    String token = f.readString();
+    f.close();
+    token.trim();
+    if (token.isEmpty()) {
+        return;
+    }
     global_homeassistant_token = token;
     SaveSetting();
 }

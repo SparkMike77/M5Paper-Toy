@@ -185,6 +185,14 @@ void key_diagnostics_toggle_cb(epdgui_args_vector_t &args) {
     btn->Draw(UPDATE_MODE_GL16);
 }
 
+void key_wifi_powersave_toggle_cb(epdgui_args_vector_t &args) {
+    EPDGUI_Button *btn = (EPDGUI_Button*)(args[0]);
+    bool enabled = !IsWifiPowerSaveEnabled();
+    SetWifiPowerSaveEnabled(enabled); // takes effect immediately, no restart needed
+    btn->setLabel(enabled ? "Wi-Fi Power Save: ON" : "Wi-Fi Power Save: OFF");
+    btn->Draw(UPDATE_MODE_GL16);
+}
+
 Frame_Settings::Frame_Settings(void) {
     _frame_name = "Frame_Settings";
 
@@ -210,6 +218,7 @@ Frame_Settings::Frame_Settings(void) {
     _key_wallpaper = new EPDGUI_Button(4, 470, 532, 61);
     _key_homeassistant = new EPDGUI_Button(4, 530, 532, 61);
     _key_syncntp = new EPDGUI_Button(4, 590, 532, 61);
+    _key_wifi_powersave = new EPDGUI_Button(4, 880, 532, 61);
     _key_restart = new EPDGUI_Button(4, 690, 532, 61);
     _key_shutdown = new EPDGUI_Button(4, 690, 532, 61);
 
@@ -244,6 +253,8 @@ Frame_Settings::Frame_Settings(void) {
     _key_sd_autofmt->setLabel(IsSDAutoFormatEnabled() ? "Format SD on Boot: ON" : "Format SD on Boot: OFF");
     _key_sd_force_format->setLabel("Format SD Card Now");
     _key_diagnostics->setLabel(IsDiagnosticsEnabled() ? "Diagnostics: ON" : "Diagnostics: OFF");
+    _key_homeassistant->setLabel("Home Assistant");
+    _key_wifi_powersave->setLabel(IsWifiPowerSaveEnabled() ? "Wi-Fi Power Save: ON" : "Wi-Fi Power Save: OFF");
     _timezone_canvas->drawString("Time Zone (UTC)", 15, 35);
     exitbtn("Home");
     _canvas_title->drawString("Settings", 270, 34);
@@ -272,6 +283,9 @@ Frame_Settings::Frame_Settings(void) {
     _key_homeassistant->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key_homeassistant->Bind(EPDGUI_Button::EVENT_RELEASED, &key_homeassistant_cb);
 
+    _key_wifi_powersave->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)_key_wifi_powersave);
+    _key_wifi_powersave->Bind(EPDGUI_Button::EVENT_RELEASED, &key_wifi_powersave_toggle_cb);
+
     _key_shutdown->Bind(EPDGUI_Button::EVENT_RELEASED, &key_shutdown_cb);
     _key_restart->Bind(EPDGUI_Button::EVENT_RELEASED, &key_restart_cb);
     _key_syncntp->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, _canvas_title);
@@ -289,6 +303,7 @@ Frame_Settings::~Frame_Settings(void) {
     delete _key_diagnostics;
     delete _key_wallpaper;
     delete _key_homeassistant;
+    delete _key_wifi_powersave;
     delete _key_shutdown;
     delete _key_restart;
     delete _key_syncntp;
@@ -324,6 +339,7 @@ int Frame_Settings::init(epdgui_args_vector_t &args) {
     EPDGUI_AddObject(_key_diagnostics);
     EPDGUI_AddObject(_key_wallpaper);
     EPDGUI_AddObject(_key_homeassistant);
+    EPDGUI_AddObject(_key_wifi_powersave);
     EPDGUI_AddObject(_key_shutdown);
     EPDGUI_AddObject(_key_restart);
     EPDGUI_AddObject(_key_syncntp);

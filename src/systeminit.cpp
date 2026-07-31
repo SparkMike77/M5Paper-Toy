@@ -135,6 +135,11 @@ void SysInit_Start(void) {
         log_e("Failed to initialize SD card.");
         // SysInit_UpdateInfo("[ERROR] Failed to initialize SD card.");
         // WaitForUser();
+     } else {
+        // Picks up /HomeAssistant_Token.txt if present, so dropping a new
+        // file on the SD card (e.g. via the uploader) rotates the token on
+        // next boot without needing the on-device keyboard.
+        LoadHomeAssistantTokenFromSD();
     }
 
     SysInit_UpdateInfo("Initializing Touch pad...");

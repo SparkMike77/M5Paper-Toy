@@ -23,6 +23,7 @@ private:
     EPDGUI_Button *_key_restart;
     EPDGUI_Button *_key_syncntp;
     EPDGUI_Button *_key_homeassistant;
+    EPDGUI_Button *_key_wifi_powersave;
 
     EPDGUI_Button *key_timezone_plus;
     EPDGUI_Button *key_timezone_reset;

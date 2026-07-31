@@ -1,5 +1,6 @@
 #include "upload_server.h"
 #include "global_setting.h"
+#include "wifi_power.h"
 #include <WebServer.h>
 #include <WiFi.h>
 #include <SD.h>
@@ -52,6 +53,10 @@ static void HandleUploadData() {
         if (upload_file) {
             upload_file.write(upload.buf, upload.currentSize);
         }
+        // Keeps re-arming the idle-disconnect countdown for as long as
+        // chunks keep arriving, so Wi-Fi power save never drops the
+        // connection mid-transfer.
+        WifiPower_NoteActivity();
      } else if (upload.status == UPLOAD_FILE_END) {
         if (upload_file) {
             upload_file.close();

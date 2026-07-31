@@ -1,4 +1,5 @@
 #include "frame_home.h"
+#include "../wifi_power.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 
@@ -188,6 +189,7 @@ bool Frame_Home::RefreshHomeAssistantState(HomeAssistantSwitchBinding* binding) 
     if (WiFi.status() != WL_CONNECTED) {
         return false;
     }
+    WifiPower_NoteActivity();
 
     HTTPClient http;
     WiFiClient client;
@@ -236,6 +238,7 @@ bool Frame_Home::SetHomeAssistantState(HomeAssistantSwitchBinding* binding, bool
     if (WiFi.status() != WL_CONNECTED) {
         return false;
     }
+    WifiPower_NoteActivity();
 
     String service = enabled ? "turn_on" : "turn_off";
     String payload = String("{\"entity_id\":\"") + binding->entity_id + "\"}";
@@ -383,6 +386,13 @@ Frame_Home::Frame_Home(void) {
     _key_exit->Bind(EPDGUI_Button::EVENT_RELEASED, &Frame_Base::exit_cb);
 }
 
+void Frame_Home::exit(void) {
+    // Restarts the idle countdown from a full 60 seconds at the moment
+    // this screen closes, rather than from whenever the last HA request
+    // happened to fire while it was still open.
+    WifiPower_NoteActivity();
+}
+
 Frame_Home::~Frame_Home(void) {
     delete _sw_light1;
     delete _sw_light2;
@@ -398,6 +408,9 @@ Frame_Home::~Frame_Home(void) {
 
 int Frame_Home::init(epdgui_args_vector_t &args) {
     _is_run = 1;
+    // Reconnects (blocking briefly, like the boot-time connect) if Wi-Fi
+    // power save had disconnected us since this screen was last open.
+    WifiPower_Reconnect();
     _home_assistant_online = CheckHomeAssistantReachability();
     M5.EPD.Clear();
 

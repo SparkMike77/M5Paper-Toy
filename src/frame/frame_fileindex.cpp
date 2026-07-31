@@ -3,6 +3,7 @@
 #include "frame_pictureviewer.h"
 #include "frame_epubreader.h"
 #include "frame_pdfreader.h"
+#include "../wifi_power.h"
 
 
 #define MAX_BTN_NUM     14
@@ -219,6 +220,13 @@ void Frame_FileIndex::listDir(fs::FS &fs, const char *dirname) {
     }
 }
 
+void Frame_FileIndex::exit(void) {
+    // Restarts the idle countdown from a full 60 seconds whenever this
+    // screen (or a subfolder listing pushed from it) is left, rather than
+    // from whenever the last Wi-Fi activity happened to occur.
+    WifiPower_NoteActivity();
+}
+
 Frame_FileIndex::~Frame_FileIndex(void) {
     for (int i = 0; i < _key_files.size(); i++) {
         delete _key_files[i];
@@ -227,6 +235,11 @@ Frame_FileIndex::~Frame_FileIndex(void) {
 
 int Frame_FileIndex::init(epdgui_args_vector_t &args) {
     _is_run = 1;
+    // Reconnects (blocking briefly, like the boot-time connect) if Wi-Fi
+    // power save had disconnected us since Storage was last open, same as
+    // the Home screen - this is the page you'd browse here from another
+    // device's browser to upload a file to, so it needs Wi-Fi back too.
+    WifiPower_Reconnect();
 
     if (_key_files.size() == 0) {
         listDir(SD, _path.c_str());

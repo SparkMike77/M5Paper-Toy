@@ -24,6 +24,7 @@ void SetWifi(String ssid, String password);
 String GetWifiSSID(void);
 String GetWifiPassword(void);
 void SetHomeAssistantConfig(String url, String token);
+void LoadHomeAssistantTokenFromSD(void);
 void SetHomeAssistantEntity(uint8_t index, String entity_id);
 String GetHomeAssistantURL(void);
 String GetHomeAssistantToken(void);
@@ -60,5 +61,8 @@ void SetSDForceFormatPending(uint8_t val);
 uint8_t IsDiagnosticsEnabled(void);
 void SetDiagnosticsEnabled(uint8_t val);
 void ApplyDiagnosticsLevel(void);
+
+uint8_t IsWifiPowerSaveEnabled(void);
+void SetWifiPowerSaveEnabled(uint8_t val);
 
 #endif //_GLOBAL_SETTING_H_

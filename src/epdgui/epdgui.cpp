@@ -3,6 +3,7 @@
 #include <list>
 #include "epdgui.h"
 #include "../upload_server.h"
+#include "../wifi_power.h"
 
 typedef struct {
     Frame_Base* frame;
@@ -112,6 +113,7 @@ void EPDGUI_Run(Frame_Base* frame) {
         }
 
         UploadServer_Loop();
+        WifiPower_Loop();
 
         // The loop above has no other blocking call, so without this the
         // Arduino loop task spins at 100% CPU nonstop and the idle task
