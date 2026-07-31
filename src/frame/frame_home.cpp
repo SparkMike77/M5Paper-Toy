@@ -16,43 +16,6 @@ void ApplyHomeAssistantHeaders(HTTPClient& http) {
     http.addHeader("Content-Type", "application/json");
 }
 
-bool TryProbeHomeAssistant(const String& host_spec, const String& path) {
-    WiFiClient client;
-    client.setTimeout(2000);
-
-    String host = host_spec;
-    uint16_t port = 8123;
-    int colon = host.lastIndexOf(':');
-    if (colon >= 0) {
-        host = host.substring(0, colon);
-        port = host_spec.substring(colon + 1).toInt();
-    }
-
-    if (!client.connect(host.c_str(), port)) {
-        return false;
-    }
-
-    client.print(String("GET ") + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n");
-
-    uint32_t start = millis();
-    while (millis() - start < 2500) {
-        if (client.available()) {
-            String response_line = client.readStringUntil('\n');
-            if (response_line.startsWith("HTTP/")) {
-                int status_code = response_line.substring(9, 12).toInt();
-                client.stop();
-                return status_code >= 200 && status_code < 600;
-            }
-            break;
-        }
-        if (!client.connected()) {
-            break;
-        }
-    }
-
-    client.stop();
-    return false;
-}
 }
 
 void Frame_Home::InitSwitch(EPDGUI_Switch* sw, String title, String subtitle, const uint8_t *img1, const uint8_t *img2) {
@@ -117,25 +80,6 @@ void key_home_hass_toggle_cb(epdgui_args_vector_t &args) {
     }
 
     binding->frame->SetHomeAssistantState(binding, enabled);
-}
-
-bool Frame_Home::CheckHomeAssistantReachability() {
-    if (WiFi.status() != WL_CONNECTED) {
-        return false;
-    }
-
-    const char* hosts[] = {"homeassistant.local", "homeassistant", "homeassistant.local:8123", "homeassistant:8123"};
-    const char* paths[] = {"/api/", "/", "/api"};
-
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 3; j++) {
-            if (TryProbeHomeAssistant(hosts[i], paths[j])) {
-                return true;
-            }
-        }
-    }
-
-    return false;
 }
 
 void Frame_Home::ApplyOfflineVisualState() {
@@ -411,7 +355,22 @@ int Frame_Home::init(epdgui_args_vector_t &args) {
     // Reconnects (blocking briefly, like the boot-time connect) if Wi-Fi
     // power save had disconnected us since this screen was last open.
     WifiPower_Reconnect();
-    _home_assistant_online = CheckHomeAssistantReachability();
+
+    // "Online" used to be decided by a separate unauthenticated probe hit
+    // against /api/ before ever making a real call - which is exactly the
+    // kind of repeated failed-auth request Home Assistant's ip_ban watches
+    // for, and got this device's IP banned. Deriving it from whether any of
+    // the real, already-authenticated state calls below succeed avoids that
+    // extra request entirely instead of just fixing its headers.
+    _home_assistant_online = false;
+    if (WiFi.status() == WL_CONNECTED) {
+        for (int i = 0; i < 4; i++) {
+            if (RefreshHomeAssistantState(&_ha_switches[i])) {
+                _home_assistant_online = true;
+            }
+        }
+    }
+
     M5.EPD.Clear();
 
     _canvas_title->fillCanvas(0);
@@ -426,10 +385,6 @@ int Frame_Home::init(epdgui_args_vector_t &args) {
 
     if (!_home_assistant_online) {
         ApplyOfflineVisualState();
-    } else {
-        for (int i = 0; i < 4; i++) {
-            RefreshHomeAssistantState(&_ha_switches[i]);
-        }
     }
 
     EPDGUI_AddObject(_sw_light1);

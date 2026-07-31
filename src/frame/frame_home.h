@@ -23,7 +23,6 @@ public:
 public:
     bool SetHomeAssistantState(HomeAssistantSwitchBinding* binding, bool enabled);
 private:
-    bool CheckHomeAssistantReachability();
     void ApplyOfflineVisualState();
     bool RefreshHomeAssistantState(HomeAssistantSwitchBinding* binding);
     bool _home_assistant_online;
