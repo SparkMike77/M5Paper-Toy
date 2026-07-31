@@ -241,19 +241,24 @@ Frame_Main::Frame_Main(void): Frame_Base(false) {
     _key[kKeyHome]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key[kKeyHome]->Bind(EPDGUI_Button::EVENT_RELEASED, key_home_cb);
 
-    // No dedicated icon art yet - falls back to the button's default
-    // bordered/centered-text rendering (same as the placeholder "Test" look).
-    _key[kKeyTimer]->setLabel("Timer");
+    _key[kKeyTimer]->CanvasNormal()->pushImage(0, 0, 92, 92, ImageResource_main_icon_timer_92x92);
+    *(_key[kKeyTimer]->CanvasPressed()) = *(_key[kKeyTimer]->CanvasNormal());
+    _key[kKeyTimer]->CanvasPressed()->ReverseColor();
     _key[kKeyTimer]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key[kKeyTimer]->Bind(EPDGUI_Button::EVENT_RELEASED, key_timer_cb);
 
-    _key[kKeyNotes]->setLabel("Notes");
+    // Reuses the "todo" art already bundled in ImageResource.h - a notepad
+    // with a clock badge - which was never wired up anywhere else and fits
+    // Notes better than sourcing something new.
+    _key[kKeyNotes]->CanvasNormal()->pushImage(0, 0, 92, 92, ImageResource_main_icon_todo_92x92);
+    *(_key[kKeyNotes]->CanvasPressed()) = *(_key[kKeyNotes]->CanvasNormal());
+    _key[kKeyNotes]->CanvasPressed()->ReverseColor();
     _key[kKeyNotes]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key[kKeyNotes]->Bind(EPDGUI_Button::EVENT_RELEASED, key_notes_cb);
 
-    // No dedicated icon art yet - falls back to the button's default
-    // bordered/centered-text rendering (same as the placeholder "Test" look).
-    _key[kKeyMaps]->setLabel("Maps");
+    _key[kKeyMaps]->CanvasNormal()->pushImage(0, 0, 92, 92, ImageResource_main_icon_maps_92x92);
+    *(_key[kKeyMaps]->CanvasPressed()) = *(_key[kKeyMaps]->CanvasNormal());
+    _key[kKeyMaps]->CanvasPressed()->ReverseColor();
     _key[kKeyMaps]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key[kKeyMaps]->Bind(EPDGUI_Button::EVENT_RELEASED, key_maps_cb);
 
