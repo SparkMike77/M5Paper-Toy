@@ -19,7 +19,7 @@ public:
     ~Frame_Home();
     int init(epdgui_args_vector_t &args);
     void exit();
-    void InitSwitch(EPDGUI_Switch* sw, String title, String subtitle, const uint8_t *img1, const uint8_t *img2);
+    void InitSwitch(EPDGUI_Switch* sw, String title, const uint8_t *img1, const uint8_t *img2);
 public:
     bool SetHomeAssistantState(HomeAssistantSwitchBinding* binding, bool enabled);
 private:

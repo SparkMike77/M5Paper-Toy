@@ -4,13 +4,19 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 
-void Frame_Home::InitSwitch(EPDGUI_Switch* sw, String title, String subtitle, const uint8_t *img1, const uint8_t *img2) {
+void Frame_Home::InitSwitch(EPDGUI_Switch* sw, String title, const uint8_t *img1, const uint8_t *img2) {
+    // Entity ids ("light.living_room_ceiling") run longer than the fake
+    // display names they replaced ("Ceiling Light"), so this uses the
+    // smaller of the two former text sizes and truncates - same threshold
+    // frame_fileindex.cpp uses for long filenames - rather than risk
+    // running text off the edge of the tile.
+    if (title.length() > 19) {
+        title = title.substring(0, 19) + "...";
+    }
     memcpy(sw->Canvas(0)->frameBuffer(), ImageResource_home_button_background_228x228, 228 * 228 / 2);
-    sw->Canvas(0)->setTextSize(36);
-    sw->Canvas(0)->setTextDatum(TC_DATUM);
-    sw->Canvas(0)->drawString(title, 114, 136);
     sw->Canvas(0)->setTextSize(26);
-    sw->Canvas(0)->drawString(subtitle, 114, 183);
+    sw->Canvas(0)->setTextDatum(TC_DATUM);
+    sw->Canvas(0)->drawString(title, 114, 160);
     memcpy(sw->Canvas(1)->frameBuffer(), sw->Canvas(0)->frameBuffer(), 228 * 228 / 2);
     sw->Canvas(0)->pushImage(68, 20, 92, 92, img1);
     sw->Canvas(1)->pushImage(68, 20, 92, 92, img2);
@@ -252,22 +258,22 @@ Frame_Home::Frame_Home(void) {
     if (_entity_ids[0].isEmpty()) {
         InitSwitchUnconfigured(_sw_light1);
     } else {
-        InitSwitch(_sw_light1, "Ceiling Light", "Living Room", ImageResource_home_icon_light_off_92x92, ImageResource_home_icon_light_on_92x92);
+        InitSwitch(_sw_light1, _entity_ids[0], ImageResource_home_icon_light_off_92x92, ImageResource_home_icon_light_on_92x92);
     }
     if (_entity_ids[1].isEmpty()) {
         InitSwitchUnconfigured(_sw_light2);
     } else {
-        InitSwitch(_sw_light2, "Table Lamp", "Bedroom", ImageResource_home_icon_light_off_92x92, ImageResource_home_icon_light_on_92x92);
+        InitSwitch(_sw_light2, _entity_ids[1], ImageResource_home_icon_light_off_92x92, ImageResource_home_icon_light_on_92x92);
     }
     if (_entity_ids[2].isEmpty()) {
         InitSwitchUnconfigured(_sw_socket1);
     } else {
-        InitSwitch(_sw_socket1, "Rice Cooker", "Kitchen", ImageResource_home_icon_socket_off_92x92, ImageResource_home_icon_socket_on_92x92);
+        InitSwitch(_sw_socket1, _entity_ids[2], ImageResource_home_icon_socket_off_92x92, ImageResource_home_icon_socket_on_92x92);
     }
     if (_entity_ids[3].isEmpty()) {
         InitSwitchUnconfigured(_sw_socket2);
     } else {
-        InitSwitch(_sw_socket2, "Computer", "Bedroom", ImageResource_home_icon_socket_off_92x92, ImageResource_home_icon_socket_on_92x92);
+        InitSwitch(_sw_socket2, _entity_ids[3], ImageResource_home_icon_socket_off_92x92, ImageResource_home_icon_socket_on_92x92);
     }
 
     memcpy(_sw_air_1->Canvas(0)->frameBuffer(), ImageResource_home_air_background_228x184, 228 * 184 / 2);
