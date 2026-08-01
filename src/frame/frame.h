@@ -23,5 +23,6 @@
 #include "frame_pictureviewer.h"
 #include "frame_home.h"
 #include "frame_homeassistant_config.h"
+#include "frame_grocerylist.h"
 
 #endif // _FRAME_H_

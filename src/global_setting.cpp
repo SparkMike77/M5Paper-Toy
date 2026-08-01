@@ -278,11 +278,11 @@ void SetHomeAssistantConfig(String url, String token) {
 }
 
 // Lets the long-lived token be dropped onto the SD card (via the same
-// uploader used for ebooks/files, at the SD root) as plain text instead of
-// typed on the on-device keyboard, and re-applied on every boot so
-// overwriting the file is enough to rotate it.
+// uploader used for ebooks/files, under /HomeAssistant/) as plain text
+// instead of typed on the on-device keyboard, and re-applied on every boot
+// so overwriting the file is enough to rotate it.
 void LoadHomeAssistantTokenFromSD(void) {
-    const char *kTokenPath = "/HomeAssistant_Token.txt";
+    const char *kTokenPath = "/HomeAssistant/HomeAssistant_Token.txt";
     if (!SD.exists(kTokenPath)) {
         return;
     }
@@ -298,6 +298,37 @@ void LoadHomeAssistantTokenFromSD(void) {
         return;
     }
     global_homeassistant_token = token;
+    SaveSetting();
+}
+
+// Same SD-file idea as the token, but unlike the token this always applies
+// whatever the file says - including clearing the slot to empty when the
+// file is missing or blank - rather than leaving a previous value in place.
+// A slot with no working entity needs to read back empty so Frame_Home can
+// tell "unconfigured" apart from "still set to whatever it was before" and
+// show a "?" instead of a switch nobody can use.
+void LoadHomeAssistantEntitiesFromSD(void) {
+    const char *kEntityPaths[4] = {
+        "/HomeAssistant/Entity0.txt",
+        "/HomeAssistant/Entity1.txt",
+        "/HomeAssistant/Entity2.txt",
+        "/HomeAssistant/Entity3.txt"
+    };
+
+    for (uint8_t i = 0; i < 4; i++) {
+        String entity;
+        if (SD.exists(kEntityPaths[i])) {
+            File f = SD.open(kEntityPaths[i], FILE_READ);
+            if (f) {
+                entity = f.readString();
+                f.close();
+                entity.trim();
+             } else {
+                log_e("Failed to open %s", kEntityPaths[i]);
+            }
+        }
+        global_homeassistant_entities[i] = entity;
+    }
     SaveSetting();
 }
 

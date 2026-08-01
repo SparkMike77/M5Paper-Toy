@@ -1,22 +1,8 @@
 #include "frame_home.h"
 #include "../wifi_power.h"
+#include "../homeassistant_client.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
-
-namespace {
-String HomeAssistantUrl(const String& path) {
-    return GetHomeAssistantURL() + path;
-}
-
-void ApplyHomeAssistantHeaders(HTTPClient& http) {
-    String token = GetHomeAssistantToken();
-    if (!token.isEmpty()) {
-        http.addHeader("Authorization", String("Bearer ") + token);
-    }
-    http.addHeader("Content-Type", "application/json");
-}
-
-}
 
 void Frame_Home::InitSwitch(EPDGUI_Switch* sw, String title, String subtitle, const uint8_t *img1, const uint8_t *img2) {
     memcpy(sw->Canvas(0)->frameBuffer(), ImageResource_home_button_background_228x228, 228 * 228 / 2);
@@ -28,6 +14,18 @@ void Frame_Home::InitSwitch(EPDGUI_Switch* sw, String title, String subtitle, co
     memcpy(sw->Canvas(1)->frameBuffer(), sw->Canvas(0)->frameBuffer(), 228 * 228 / 2);
     sw->Canvas(0)->pushImage(68, 20, 92, 92, img1);
     sw->Canvas(1)->pushImage(68, 20, 92, 92, img2);
+}
+
+// Used when the matching /HomeAssistant/EntityN.txt is missing or blank -
+// a plain "?" instead of a title/icon nobody configured, and disabled so
+// tapping it can't fire a service call with an empty entity_id.
+void Frame_Home::InitSwitchUnconfigured(EPDGUI_Switch* sw) {
+    memcpy(sw->Canvas(0)->frameBuffer(), ImageResource_home_button_background_228x228, 228 * 228 / 2);
+    sw->Canvas(0)->setTextSize(72);
+    sw->Canvas(0)->setTextDatum(CC_DATUM);
+    sw->Canvas(0)->drawString("?", 114, 114);
+    memcpy(sw->Canvas(1)->frameBuffer(), sw->Canvas(0)->frameBuffer(), 228 * 228 / 2);
+    sw->SetEnable(false);
 }
 
 void key_home_air_adjust_cb(epdgui_args_vector_t &args) {
@@ -126,7 +124,8 @@ void Frame_Home::ApplyOfflineVisualState() {
 }
 
 bool Frame_Home::RefreshHomeAssistantState(HomeAssistantSwitchBinding* binding) {
-    if (binding == NULL || binding->sw == NULL || binding->entity_id == NULL || binding->domain == NULL) {
+    if (binding == NULL || binding->sw == NULL || binding->entity_id == NULL
+            || binding->entity_id[0] == '\0' || binding->domain == NULL) {
         return false;
     }
 
@@ -175,7 +174,8 @@ bool Frame_Home::RefreshHomeAssistantState(HomeAssistantSwitchBinding* binding) 
 }
 
 bool Frame_Home::SetHomeAssistantState(HomeAssistantSwitchBinding* binding, bool enabled) {
-    if (binding == NULL || binding->sw == NULL || binding->entity_id == NULL || binding->domain == NULL) {
+    if (binding == NULL || binding->sw == NULL || binding->entity_id == NULL
+            || binding->entity_id[0] == '\0' || binding->domain == NULL) {
         return false;
     }
 
@@ -240,10 +240,35 @@ Frame_Home::Frame_Home(void) {
     M5EPD_Canvas canvas_temp(&M5.EPD);
     canvas_temp.createRender(36);
 
-    InitSwitch(_sw_light1, "Ceiling Light", "Living Room", ImageResource_home_icon_light_off_92x92, ImageResource_home_icon_light_on_92x92);
-    InitSwitch(_sw_light2, "Table Lamp", "Bedroom", ImageResource_home_icon_light_off_92x92, ImageResource_home_icon_light_on_92x92);
-    InitSwitch(_sw_socket1, "Rice Cooker", "Kitchen", ImageResource_home_icon_socket_off_92x92, ImageResource_home_icon_socket_on_92x92);
-    InitSwitch(_sw_socket2, "Computer", "Bedroom", ImageResource_home_icon_socket_off_92x92, ImageResource_home_icon_socket_on_92x92);
+    // Populated from /HomeAssistant/Entity0-3.txt at boot (LoadHomeAssistant
+    // EntitiesFromSD) - stored here rather than taken fresh from
+    // GetHomeAssistantEntity() below so entity_id below can point at a
+    // String that lives as long as this object, instead of a temporary's
+    // buffer that would already be gone by the time it's read.
+    for (int i = 0; i < 4; i++) {
+        _entity_ids[i] = GetHomeAssistantEntity(i);
+    }
+
+    if (_entity_ids[0].isEmpty()) {
+        InitSwitchUnconfigured(_sw_light1);
+    } else {
+        InitSwitch(_sw_light1, "Ceiling Light", "Living Room", ImageResource_home_icon_light_off_92x92, ImageResource_home_icon_light_on_92x92);
+    }
+    if (_entity_ids[1].isEmpty()) {
+        InitSwitchUnconfigured(_sw_light2);
+    } else {
+        InitSwitch(_sw_light2, "Table Lamp", "Bedroom", ImageResource_home_icon_light_off_92x92, ImageResource_home_icon_light_on_92x92);
+    }
+    if (_entity_ids[2].isEmpty()) {
+        InitSwitchUnconfigured(_sw_socket1);
+    } else {
+        InitSwitch(_sw_socket1, "Rice Cooker", "Kitchen", ImageResource_home_icon_socket_off_92x92, ImageResource_home_icon_socket_on_92x92);
+    }
+    if (_entity_ids[3].isEmpty()) {
+        InitSwitchUnconfigured(_sw_socket2);
+    } else {
+        InitSwitch(_sw_socket2, "Computer", "Bedroom", ImageResource_home_icon_socket_off_92x92, ImageResource_home_icon_socket_on_92x92);
+    }
 
     memcpy(_sw_air_1->Canvas(0)->frameBuffer(), ImageResource_home_air_background_228x184, 228 * 184 / 2);
     _sw_air_1->Canvas(0)->setTextDatum(TC_DATUM);
@@ -310,10 +335,10 @@ Frame_Home::Frame_Home(void) {
     _sw_air_2->AddArgs(EPDGUI_Switch::EVENT_PRESSED, 2, _sw_air_2);
     _sw_air_2->Bind(1, key_home_air_state1_cb);
 
-    _ha_switches[0] = { _sw_light1, GetHomeAssistantEntity(0).c_str(), "light", this };
-    _ha_switches[1] = { _sw_light2, GetHomeAssistantEntity(1).c_str(), "light", this };
-    _ha_switches[2] = { _sw_socket1, GetHomeAssistantEntity(2).c_str(), "switch", this };
-    _ha_switches[3] = { _sw_socket2, GetHomeAssistantEntity(3).c_str(), "switch", this };
+    _ha_switches[0] = { _sw_light1, _entity_ids[0].c_str(), "light", this };
+    _ha_switches[1] = { _sw_light2, _entity_ids[1].c_str(), "light", this };
+    _ha_switches[2] = { _sw_socket1, _entity_ids[2].c_str(), "switch", this };
+    _ha_switches[3] = { _sw_socket2, _entity_ids[3].c_str(), "switch", this };
 
     for (int i = 0; i < 4; i++) {
         _ha_switches[i].sw->SetCustomData(&_ha_switches[i]);

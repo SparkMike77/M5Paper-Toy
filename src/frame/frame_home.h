@@ -23,11 +23,16 @@ public:
 public:
     bool SetHomeAssistantState(HomeAssistantSwitchBinding* binding, bool enabled);
 private:
+    void InitSwitchUnconfigured(EPDGUI_Switch* sw);
     void ApplyOfflineVisualState();
     bool RefreshHomeAssistantState(HomeAssistantSwitchBinding* binding);
     bool _home_assistant_online;
     bool _offline_visual_applied;
     HomeAssistantSwitchBinding _ha_switches[4];
+    // Owns the entity_id strings that _ha_switches[i].entity_id points into,
+    // so those pointers stay valid for this object's whole lifetime instead
+    // of dangling once a temporary String went out of scope.
+    String _entity_ids[4];
     EPDGUI_Switch *_sw_light1;
     EPDGUI_Switch *_sw_light2;
     EPDGUI_Switch *_sw_socket1;

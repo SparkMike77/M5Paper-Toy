@@ -25,6 +25,7 @@ String GetWifiSSID(void);
 String GetWifiPassword(void);
 void SetHomeAssistantConfig(String url, String token);
 void LoadHomeAssistantTokenFromSD(void);
+void LoadHomeAssistantEntitiesFromSD(void);
 void SetHomeAssistantEntity(uint8_t index, String entity_id);
 String GetHomeAssistantURL(void);
 String GetHomeAssistantToken(void);

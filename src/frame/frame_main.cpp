@@ -10,6 +10,7 @@
 #include "frame_compare.h"
 #include "frame_home.h"
 #include "frame_maplist.h"
+#include "frame_grocerylist.h"
 #include <WiFi.h>
 
 // Approximate open-circuit-voltage discharge curve for a single-cell Li-ion/
@@ -60,7 +61,8 @@ enum {
     kKeyLifeGame,
     kKeyTimer,
     kKeyNotes,
-    kKeyMaps
+    kKeyMaps,
+    kKeyGroceryList
 };
 
 #define KEY_W 92
@@ -168,6 +170,16 @@ void key_maps_cb(epdgui_args_vector_t &args) {
     *((int*)(args[0])) = 0;
 }
 
+void key_grocerylist_cb(epdgui_args_vector_t &args) {
+    Frame_Base *frame = EPDGUI_GetFrame("Frame_GroceryList");
+    if (frame == NULL) {
+        frame = new Frame_GroceryList();
+        EPDGUI_AddFrame("Frame_GroceryList", frame);
+    }
+    EPDGUI_PushFrame(frame);
+    *((int*)(args[0])) = 0;
+}
+
 
 Frame_Main::Frame_Main(void): Frame_Base(false) {
     _frame_name = "Frame_Main";
@@ -262,6 +274,12 @@ Frame_Main::Frame_Main(void): Frame_Base(false) {
     _key[kKeyMaps]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
     _key[kKeyMaps]->Bind(EPDGUI_Button::EVENT_RELEASED, key_maps_cb);
 
+    // No dedicated icon art yet - falls back to the button's default
+    // bordered/centered-text rendering (same as Calculator).
+    _key[kKeyGroceryList]->setLabel("Grocery");
+    _key[kKeyGroceryList]->AddArgs(EPDGUI_Button::EVENT_RELEASED, 0, (void*)(&_is_run));
+    _key[kKeyGroceryList]->Bind(EPDGUI_Button::EVENT_RELEASED, key_grocerylist_cb);
+
     _time = 0;
     _next_update_time = 0;
 }
@@ -297,6 +315,7 @@ void Frame_Main::AppName(m5epd_update_mode_t mode) {
     _names->drawString("Timer", 20 + 46, 16);
     _names->drawString("Notes", 20 + 46 + 136, 16);
     _names->drawString("Maps", 20 + 46 + 2 * 136, 16);
+    _names->drawString("Grocery", 20 + 46 + 3 * 136, 16);
     _names->pushCanvas(0, 487, mode);
 }
 
