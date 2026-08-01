@@ -344,7 +344,12 @@ Frame_Home::Frame_Home(void) {
         _ha_switches[i].sw->SetCustomData(&_ha_switches[i]);
         _ha_switches[i].sw->AddArgs(EPDGUI_Switch::EVENT_PRESSED, 0, &_ha_switches[i]);
         _ha_switches[i].sw->Bind(1, key_home_hass_toggle_cb);
-        _ha_switches[i].sw->AddArgs(EPDGUI_Switch::EVENT_PRESSED, 1, &_ha_switches[i]);
+        // EVENT_NONE/EVENT_PRESSED (0/1) doubles as the state index here,
+        // matching the pattern the air-conditioner switches above use -
+        // state 0's args must be added under EVENT_NONE, not EVENT_PRESSED
+        // again, or state 0's args array stays empty and toggling a switch
+        // off (state 1 -> 0) reads args[0] on an empty vector.
+        _ha_switches[i].sw->AddArgs(EPDGUI_Switch::EVENT_NONE, 0, &_ha_switches[i]);
         _ha_switches[i].sw->Bind(0, key_home_hass_toggle_cb);
     }
 
